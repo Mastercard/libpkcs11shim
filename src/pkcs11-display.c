@@ -23,9 +23,7 @@
 #endif
 #include <string.h>
 
-#ifdef ENABLE_OPENSSL
 #include <openssl/x509.h>
-#endif
 
 #include "pkcs11-display.h"
 
@@ -186,7 +184,6 @@ print_generic(FILE *f, CK_LONG type, CK_VOID_PTR value, CK_ULONG size, CK_VOID_P
 }
 
 
-#ifdef ENABLE_OPENSSL
 static void
 print_dn(FILE *f, CK_LONG type, CK_VOID_PTR value, CK_ULONG size, CK_VOID_PTR arg)
 {
@@ -206,7 +203,6 @@ print_dn(FILE *f, CK_LONG type, CK_VOID_PTR value, CK_ULONG size, CK_VOID_PTR ar
 		}
 	}
 }
-#endif
 
 void
 print_print(FILE *f, CK_LONG type, CK_VOID_PTR value, CK_ULONG size, CK_VOID_PTR arg)
@@ -680,17 +676,9 @@ type_spec ck_attribute_specs[] = {
   { CKA_VALUE             , "CKA_VALUE            ", print_generic, NULL },
   { CKA_OBJECT_ID         , "CKA_OBJECT_ID        ", print_generic, NULL },
   { CKA_CERTIFICATE_TYPE  , "CKA_CERTIFICATE_TYPE ", print_enum,    ck_crt_t },
-#ifdef ENABLE_OPENSSL
   { CKA_ISSUER            , "CKA_ISSUER           ", print_dn,      NULL },
-#else
-  { CKA_ISSUER            , "CKA_ISSUER           ", print_generic, NULL },
-#endif
   { CKA_SERIAL_NUMBER     , "CKA_SERIAL_NUMBER    ", print_generic, NULL },
-#ifdef ENABLE_OPENSSL
   { CKA_AC_ISSUER         , "CKA_AC_ISSUER        ", print_dn,      NULL },
-#else
-  { CKA_AC_ISSUER         , "CKA_AC_ISSUER        ", print_generic, NULL },
-#endif
   { CKA_OWNER             , "CKA_OWNER            ", print_generic, NULL },
   { CKA_ATTR_TYPES        , "CKA_ATTR_TYPES       ", print_generic, NULL },
   { CKA_TRUSTED           , "CKA_TRUSTED          ", print_generic, NULL },
@@ -701,11 +689,7 @@ type_spec ck_attribute_specs[] = {
   { CKA_HASH_OF_ISSUER_PUBLIC_KEY, "CKA_HASH_OF_ISSUER_PUBLIC_KEY ", print_generic, NULL },
   { CKA_CHECK_VALUE       , "CKA_CHECK_VALUE      ", print_generic, NULL },
   { CKA_KEY_TYPE          , "CKA_KEY_TYPE         ", print_enum,    ck_key_t },
-#ifdef ENABLE_OPENSSL
   { CKA_SUBJECT           , "CKA_SUBJECT          ", print_dn,      NULL },
-#else
-  { CKA_SUBJECT           , "CKA_SUBJECT          ", print_generic, NULL },
-#endif
   { CKA_ID                , "CKA_ID               ", print_generic, NULL },
   { CKA_SENSITIVE         , "CKA_SENSITIVE        ", print_boolean, NULL },
   { CKA_ENCRYPT           , "CKA_ENCRYPT          ", print_boolean, NULL },
@@ -741,6 +725,8 @@ type_spec ck_attribute_specs[] = {
   { CKA_ALWAYS_SENSITIVE  , "CKA_ALWAYS_SENSITIVE ", print_boolean, NULL },
   { CKA_KEY_GEN_MECHANISM , "CKA_KEY_GEN_MECHANISM", print_boolean, NULL },
   { CKA_MODIFIABLE        , "CKA_MODIFIABLE       ", print_boolean, NULL },
+  { CKA_COPYABLE          , "CKA_COPYABLE         ", print_boolean, NULL },
+  { CKA_DESTROYABLE       , "CKA_DESTROYABLE      ", print_boolean, NULL },
   { CKA_ECDSA_PARAMS      , "CKA_ECDSA_PARAMS     ", print_generic, NULL },
   { CKA_EC_PARAMS         , "CKA_EC_PARAMS        ", print_generic, NULL },
   { CKA_EC_POINT          , "CKA_EC_POINT         ", print_generic, NULL },
@@ -750,6 +736,7 @@ type_spec ck_attribute_specs[] = {
   { CKA_WRAP_WITH_TRUSTED , "CKA_WRAP_WITH_TRUSTED ", print_generic, NULL },
   { CKA_WRAP_TEMPLATE     , "CKA_WRAP_TEMPLATE    ", print_generic, NULL },
   { CKA_UNWRAP_TEMPLATE   , "CKA_UNWRAP_TEMPLATE  ", print_generic, NULL },
+  { CKA_DERIVE_TEMPLATE   , "CKA_DERIVE_TEMPLATE  ", print_generic, NULL },
   { CKA_OTP_FORMAT        , "CKA_OTP_FORMAT       ", print_generic, NULL },
   { CKA_OTP_LENGTH        , "CKA_OTP_LENGTH       ", print_generic, NULL },
   { CKA_OTP_TIME_INTERVAL , "CKA_OTP_TIME_INTERVAL ", print_generic, NULL },
