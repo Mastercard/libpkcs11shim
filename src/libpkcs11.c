@@ -27,7 +27,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "pkcs11.h"
+#include "cryptoki.h"
 
 #include "libscdl.h"
 #include "libpkcs11.h"

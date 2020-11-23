@@ -23,7 +23,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-#include "pkcs11.h"
+#include "cryptoki.h"
 
 #ifdef __cplusplus
 extern "C" {
