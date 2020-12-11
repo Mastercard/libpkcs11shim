@@ -67,13 +67,13 @@ enter(const char *function)
 	fprintf(shim_output, "\n%d: %s\n", count++, function);
 #ifdef _WIN32
         GetLocalTime(&st);
-        fprintf(shim_output, "%i-%02i-%02i %02i:%02i:%02i.%03i\n", st.wYear, st.wMonth, st.wDay,
+        fprintf(shim_output, ">> %i-%02i-%02i %02i:%02i:%02i.%03i\n", st.wYear, st.wMonth, st.wDay,
 			st.wHour, st.wMinute, st.wSecond, st.wMilliseconds);
 #else
 	gettimeofday (&tv, NULL);
 	tm = localtime (&tv.tv_sec);
 	strftime (time_string, sizeof(time_string), "%F %H:%M:%S", tm);
-	fprintf(shim_output, "%s.%03ld\n", time_string, (long)tv.tv_usec / 1000);
+	fprintf(shim_output, ">> %s.%03ld\n", time_string, (long)tv.tv_usec / 1000);
 #endif
 
 }
@@ -81,6 +81,21 @@ enter(const char *function)
 static CK_RV
 retne(CK_RV rv)
 {
+#ifdef _WIN32
+	SYSTEMTIME st;
+        GetLocalTime(&st);
+        fprintf(shim_output, "<< %i-%02i-%02i %02i:%02i:%02i.%03i\n", st.wYear, st.wMonth, st.wDay,
+			st.wHour, st.wMinute, st.wSecond, st.wMilliseconds);
+#else
+	struct tm *tm;
+	struct timeval tv;
+	char time_string[40];
+	gettimeofday (&tv, NULL);
+	tm = localtime (&tv.tv_sec);
+	strftime (time_string, sizeof(time_string), "%F %H:%M:%S", tm);
+	fprintf(shim_output, "<< %s.%03ld\n", time_string, (long)tv.tv_usec / 1000);
+#endif
+
 	fprintf(shim_output, "Returned:  %ld %s\n", (unsigned long) rv, lookup_enum ( RV_T, rv ));
 	fflush(shim_output);
 	return rv;
