@@ -54,7 +54,7 @@ void *sc_dlopen(const char *filename)
 
 void *sc_dlsym(void *handle, const char *symbol)
 {
-	return dlsym(RTLD_NEXT, symbol);
+	return dlsym(handle, symbol);
 }
 
 const char *sc_dlerror(void)
