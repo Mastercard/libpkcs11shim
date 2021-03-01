@@ -2,13 +2,13 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.69])
-AC_INIT([libp11shim], [1.0.0], [eric.devolder@mastercard.com])
+AC_INIT([libp11shim], [1.0.1], [eric.devolder@mastercard.com])
 AC_CONFIG_MACRO_DIR([m4])
 AC_CONFIG_SRCDIR([src/pkcs11-display.c])
 AC_CONFIG_HEADERS([include/config.h])
 
 # automake & libtool
-AM_INIT_AUTOMAKE([-Wall -Werror foreign subdir-objects])
+AM_INIT_AUTOMAKE([-Wall -Werror foreign subdir-objects tar-pax])
 
 # Checks for programs.
 AC_PROG_CC

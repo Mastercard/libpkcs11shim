@@ -1,6 +1,8 @@
-#!/bin/sh
+#!/usr/bin/env sh
 
-mkdir -p m4
-autoreconf --verbose --install --force
+# pull submodule stuff
 git submodule update --init include/cryptoki
+
+# create configure scripts
+autoreconf -vfi
 
