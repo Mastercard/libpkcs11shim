@@ -12,5 +12,6 @@ libpkcs11shim_la_CFLAGS = $(LIBCRYPTO_CFLAGS)
 libpkcs11shim_la_LIBADD = $(LIBCRYPTO_LIBS)
 libpkcs11shim_la_LDFLAGS = $(AM_LDFLAGS) \
 	-export-symbols "$(srcdir)/pkcs11.exports" \
-	-module -shared -avoid-version -no-undefined
+	-module -shared -avoid-version -no-undefined \
+	-version-info 1:0:0
 

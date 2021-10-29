@@ -22,7 +22,14 @@ AC_PROG_LIBTOOL			dnl libtool init
 # Checks for libraries.
 
 PKG_PROG_PKG_CONFIG
-PKG_CHECK_MODULES([LIBCRYPTO], [libcrypto], [])
+# RedHat-derived distros have libcrypto11, Debian-derived & FreeBSD have libcrypto instead
+PKG_CHECK_MODULES([LIBCRYPTO],
+		  [libcrypto11 >= 1.1.1],
+		  [],
+		  [ AC_MSG_WARN([libcrypto11 not found with pkg-config, trying with libcrypto])
+		    PKG_CHECK_MODULES([LIBCRYPTO],
+				      [libcrypto >= 1.1.1])] )
+
 
 # Checks for header files.
 AC_CHECK_HEADERS([inttypes.h limits.h stddef.h stdlib.h string.h sys/time.h])
