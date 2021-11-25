@@ -1,8 +1,13 @@
 #                                               -*- Autoconf -*-
 # Process this file with autoconf to produce a configure script.
 
+
+#
+# Note: autoconf-archive must be present
+#
+
 AC_PREREQ([2.69])
-AC_INIT([libp11shim], [1.0.1], [eric.devolder@mastercard.com])
+AC_INIT([libp11shim], [1.1.0], [eric.devolder@mastercard.com])
 AC_CONFIG_MACRO_DIR([m4])
 AC_CONFIG_SRCDIR([src/pkcs11-display.c])
 AC_CONFIG_HEADERS([include/config.h])
@@ -12,6 +17,14 @@ AM_INIT_AUTOMAKE([-Wall -Werror foreign subdir-objects tar-pax])
 
 # Checks for programs.
 AC_PROG_CC
+
+# Check if C (gnu11) flavour is supported
+# this is needed for atomics, and for localtime_r() (which is not present on std=c11)
+AX_CHECK_COMPILE_FLAG([-std=gnu11], 
+  [ CFLAGS+=" -std=gnu11"], 
+  [ AC_MSG_ERROR([gnu11 flavour of C language not supported.]) ])
+
+AX_PTHREAD
 AM_PROG_AR
 
 # Libtool
