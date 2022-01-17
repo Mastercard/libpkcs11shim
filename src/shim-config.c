@@ -39,7 +39,7 @@ bool init_shim_config()
 	fprintf(stderr, "*** ERROR: no module specified. Please set PKCS11SHIM environment.\n");
 	return false;
     }
-    
+
     config.targetlib = strdup(targetlib);
 
     char *output = getenv("PKCS11SHIM_OUTPUT");
@@ -63,7 +63,7 @@ bool init_shim_config()
 	    break;
 
 	default:
-	    fprintf(stderr,"*** WARNING: invalid consistency level specified: %ld. Will use basic mode.\n", consistency_level);
+	    fprintf(stderr,"*** WARNING: invalid consistency level specified: %u. Will use basic mode.\n", consistency_level);
 	    config.consistency_level = basic;
 	}
     }

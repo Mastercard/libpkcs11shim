@@ -88,9 +88,11 @@ static void enter(const char *function)
 
     if(use_print_mutex) pthread_mutex_lock(&print_mutex);
 
-    deferred_fprintf(shim_config_output(), CNTSTRING, cnt++, function);
+    deferred_fprintf(shim_config_output(), CNTSTRING, cnt, function);
     deferred_fprintf(shim_config_output(), "[tid] 0x%.8lx\n", me);
     deferred_fprintf(shim_config_output(), "[tic] %s.%03ld\n", time_string, (long)tv.tv_usec / 1000);
+    /* we are just incrementing a counter, the relaxed memory model can be safely used */
+    atomic_fetch_add_explicit(&cnt, 1, memory_order_relaxed);
 }
 
 /* postcall */
