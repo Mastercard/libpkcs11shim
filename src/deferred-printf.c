@@ -16,6 +16,8 @@
  * limitations under the License.
  */
 
+/* queue processor algorithm from https://stackoverflow.com/a/4577987/979318 */
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdbool.h>
