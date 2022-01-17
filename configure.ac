@@ -6,8 +6,29 @@
 # Note: autoconf-archive must be present
 #
 
-AC_PREREQ([2.71])
-AC_INIT([libp11shim],[1.2.0],[eric.devolder@mastercard.com])
+AC_PREREQ([2.69])
+
+# From https://stackoverflow.com/a/8735145/979318
+#
+# AX_DEFINE_SUBST(NAME, VALUE, DESCRIPTION)
+# -----------------------------------------
+AX_DEFUN([AC_DEFINE_SUBST], [
+AC_DEFINE([$1], [$2], [$3])
+AC_SUBST([$1], ['$2'])
+])
+
+
+define(VERSION_MAJOR,1)
+define(VERSION_MINOR,2)
+define(VERSION_FIX,0)
+
+# Following http://web.mit.edu/gnu/doc/html/libtool.html#SEC36
+define(ABI_CUR,0)
+define(ABI_REV,1)
+define(ABI_AGE,0)
+
+
+AC_INIT([libp11shim],[VERSION_MAJOR.VERSION_MINOR.VERSION_FIX],[eric.devolder@mastercard.com])
 AC_CONFIG_MACRO_DIR([m4])
 AC_CONFIG_SRCDIR([src/pkcs11-display.c])
 AC_CONFIG_HEADERS([include/config.h])
@@ -57,6 +78,14 @@ AC_TYPE_SIZE_T
 AC_FUNC_MALLOC
 AC_CHECK_FUNCS([gettimeofday memset])
 
+
+
+# Perform substs
+AC_SUBST(LIBSHIM_CUR,[ABI_CUR])
+AC_SUBST(LIBSHIM_REV,[ABI_REV])
+AC_SUBST(LIBSHIM_AGE,[ABI_AGE])
+
 AC_CONFIG_FILES([Makefile
                  src/Makefile])
+
 AC_OUTPUT

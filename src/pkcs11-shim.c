@@ -1449,7 +1449,15 @@ static void init_shim(void)
 	return;
     }
 
-    fprintf(shim_config_output(), "\n\n*************** PKCS#11 shim library *****************\n");
+    fprintf(shim_config_output(), 
+	    "\n\n"
+	    "************************* PKCS#11 shim library *****************************\n"
+	    "* The following env variables can be used to adjust the library behaviour: *\n"
+	    "* - PKCS11SHIM: contains the path of the library to intercept calls to     *\n"
+	    "* - PKCS11SHIM_OUTPUT: path to an output file where to write logs          *\n"
+	    "* - PKS11SHIM_CONSISTENCY: level of consistency for logs (0,1 or 2)        *\n"
+	    "****************************************************************************\n"
+	    "\n");
 
     switch(shim_config_consistency_level()) {
     case per_callblock:		/* consistency per call accross threads, no deferred output */

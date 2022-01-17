@@ -1,5 +1,5 @@
 *~
-
+*.tar.gz
 /aclocal.m4
 /ar-lib
 /compile
