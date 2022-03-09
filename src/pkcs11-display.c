@@ -22,7 +22,9 @@
 #include "config.h"
 #include <string.h>
 
+#if defined(HAVE_OPENSSL)
 #include <openssl/x509.h>
+#endif
 
 #include "pkcs11-display.h"
 #include "deferred-printf.h"
@@ -175,11 +177,11 @@ print_generic(FILE *f, CK_LONG type, CK_VOID_PTR value, CK_ULONG size, CK_VOID_P
     deferred_fprintf(f, "\n");
 }
 
-
 static void
 print_dn(FILE *f, CK_LONG type, CK_VOID_PTR value, CK_ULONG size, CK_VOID_PTR arg)
 {
     print_generic(f, type, value, size, arg);
+#if defined(HAVE_OPENSSL)
     if(size && value) {
 	X509_NAME *name;
 	const unsigned char *tmp = value;
@@ -194,6 +196,7 @@ print_dn(FILE *f, CK_LONG type, CK_VOID_PTR value, CK_ULONG size, CK_VOID_PTR ar
 	    BIO_free(bio);
 	}
     }
+#endif
 }
 
 void
