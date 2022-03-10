@@ -50,6 +50,8 @@ bool init_shim_config()
 	    perror("*** ERROR: could not open requested output file");
 	    config.output = stderr;
 	}
+    } else {
+	config.output = stderr;	/* by default: stderr */
     }
 
     char *consistency = getenv("PKCS11SHIM_CONSISTENCY");

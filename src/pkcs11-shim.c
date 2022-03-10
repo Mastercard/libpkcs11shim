@@ -21,6 +21,7 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 #include <sys/time.h>
 #include <time.h>
 #include <pthread.h>
@@ -1452,7 +1453,7 @@ static void init_shim(void)
     fprintf(shim_config_output(), 
 	    "\n\n"
 	    "************************* PKCS#11 shim library *****************************\n"
-	    "* - version : %s                                                     *\n"
+	    "* - version %s%*s*\n"  
 #if defined(HAVE_OPENSSL)
 	    "* - with OpenSSL support                                                   *\n"
 #else
@@ -1463,7 +1464,8 @@ static void init_shim(void)
 	    "* - PKCS11SHIM_OUTPUT: path to an output file where to write logs          *\n"
 	    "* - PKS11SHIM_CONSISTENCY: level of consistency for logs (0,1 or 2)        *\n"
 	    "****************************************************************************\n"
-	    "\n", VERSION);
+	    "\n",
+	    VERSION, 63-strlen(VERSION), "");
 
     switch(shim_config_consistency_level()) {
     case per_callblock:		/* consistency per call accross threads, no deferred output */
