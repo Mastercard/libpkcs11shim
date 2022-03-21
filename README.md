@@ -10,7 +10,7 @@ to use this library:
 ### options
 The following environment variables can be defined, to adjust the logging behaviour:
 
-- `PKCS11SHIM_OUTPUT`, when present, specifies where the log entries should be written. If not specified, everything goes to `/dev/stderr`.
+- `PKCS11SHIM_OUTPUT`, when present, specifies a filename where the log entries should be written. Fi the file already exists, logs will be appended to it. If the filename contains `%p`, it will be replaced with the pid of the running process. When `PKCS11SHIM_OUTPUT` is not specified, output goes to `/dev/stderr`.
 - `PKCS11SHIM_CONSISTENCY`; when present, allows to adjust how consistent are logs, in a multithreaded environment:
 
  * `0` (basic)

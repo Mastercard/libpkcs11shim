@@ -18,6 +18,7 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include "shim-config.h"
 
 
@@ -42,16 +43,56 @@ bool init_shim_config()
 
     config.targetlib = strdup(targetlib);
 
+    config.output = stderr;	/* set it by default */
     char *output = getenv("PKCS11SHIM_OUTPUT");
     if(output) {
-	config.output = fopen(output, "a");
 
-	if (!config.output) {
-	    perror("*** ERROR: could not open requested output file");
-	    config.output = stderr;
+	/* check if the PKCS11SHIM_OUTPUT contains %p */
+	
+	char *filename = NULL;
+	char *lookup=strdup(output);
+
+	if(!lookup) {
+	    perror("Cannot duplicate string in memory");
+	    goto error;
 	}
-    } else {
-	config.output = stderr;	/* by default: stderr */
+	char *index=strcasestr(lookup, "%p"); /* we look for the first occurence of `%p` */
+
+	/* if found */
+	if(index) {
+	    size_t filename_size = strlen(output)+16; /* a printed PID should never exceed 16 chars */
+	    filename=malloc(filename_size); 
+	    if(!filename) {
+		perror("Cannot allocate memory for generating filename");
+		goto error;
+	    }
+	    
+	    *index=0;		/* terminate the string there */
+
+	    pid_t pid = getpid(); /* obtain PID */
+	    snprintf(filename, filename_size, "%s%d%s", lookup, pid, index+2);
+
+	} else {
+	    filename = strdup(lookup);
+	    if(!filename) {
+		perror("Cannot allocate memory for generating filename");
+		goto error;
+	    }
+	    
+	}
+
+    error:
+	if(lookup) free(lookup);
+
+	/* this section takes care of opening the file */
+	if(filename) {
+	    config.output = fopen(filename, "a");
+	    if (!config.output) {
+		perror("*** ERROR: could not open requested output file");
+		config.output = stderr;
+	    }
+	    free(filename);
+	}
     }
 
     char *consistency = getenv("PKCS11SHIM_CONSISTENCY");

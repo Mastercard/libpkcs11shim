@@ -22,6 +22,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <unistd.h>
 #include <sys/time.h>
 #include <time.h>
 #include <pthread.h>
@@ -79,18 +80,21 @@ static void enter(const char *function)
     struct tm *tm;
     struct tm threadlocal_tm;		/* used by localtime_r() */
     struct timeval tv;
-    pthread_t me;
+    pid_t me_process;
+    pthread_t me_thread;
     char time_string[40];
 
     gettimeofday (&tv, NULL);
     tm = localtime_r(&tv.tv_sec, &threadlocal_tm);
     strftime (time_string, sizeof(time_string), "%F %H:%M:%S", tm);
-    me = pthread_self();
+    me_process = getpid();
+    me_thread = pthread_self();
 
     if(use_print_mutex) pthread_mutex_lock(&print_mutex);
 
     deferred_fprintf(shim_config_output(), CNTSTRING, cnt, function);
-    deferred_fprintf(shim_config_output(), "[tid] 0x%.8lx\n", me);
+    deferred_fprintf(shim_config_output(), "[pid] %ld\n", me_process);
+    deferred_fprintf(shim_config_output(), "[tid] %ld\n", me_thread);
     deferred_fprintf(shim_config_output(), "[tic] %s.%03ld\n", time_string, (long)tv.tv_usec / 1000);
     /* we are just incrementing a counter, the relaxed memory model can be safely used */
     atomic_fetch_add_explicit(&cnt, 1, memory_order_relaxed);
