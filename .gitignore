@@ -28,5 +28,6 @@ Makefile.in
 .libs/
 
 /lib
+/usr
 /*.ign/
 
