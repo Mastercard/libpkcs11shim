@@ -56,7 +56,7 @@ bool init_shim_config()
 	    perror("Cannot duplicate string in memory");
 	    goto error;
 	}
-	char *index=strcasestr(lookup, "%p"); /* we look for the first occurence of `%p` */
+	char *index=strstr(lookup, "%p"); /* we look for the first occurence of `%p` */
 
 	/* if found */
 	if(index) {
