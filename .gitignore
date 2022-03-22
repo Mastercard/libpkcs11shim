@@ -31,3 +31,7 @@ Makefile.in
 /usr
 /*.ign/
 
+# from pkcs11-tools
+.pkcs11rc
+pkcs11rc
+
