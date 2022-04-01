@@ -144,7 +144,7 @@ print_generic(FILE *f, CK_LONG type, CK_VOID_PTR value, CK_ULONG size, CK_VOID_P
 	    CK_BYTE val;
 
 	    if (i && (i % 16) == 0) {
-		deferred_fprintf(f, "\n    %08X  %s %s", offset, hex, ascii);
+		deferred_fprintf(f, "\n      %08X  %s %s", offset, hex, ascii);
 		offset += 16;
 		hex_ptr = hex;
 		ascii_ptr = ascii;
@@ -166,7 +166,7 @@ print_generic(FILE *f, CK_LONG type, CK_VOID_PTR value, CK_ULONG size, CK_VOID_P
 	/* padd */
 	while (strlen(hex) < 3*16)
 	    strcat(hex, "   ");
-	deferred_fprintf(f, "\n    %08X  %s %s", offset, hex, ascii);
+	deferred_fprintf(f, "\n      %08X  %s %s", offset, hex, ascii);
     }
     else {
 	if (value != NULL)
@@ -190,7 +190,7 @@ print_dn(FILE *f, CK_LONG type, CK_VOID_PTR value, CK_ULONG size, CK_VOID_PTR ar
 	if(name) {
 	    BIO *bio = BIO_new(BIO_s_file());
 	    BIO_set_fp(bio, f, 0);
-	    deferred_fprintf(f, "    DN: ");
+	    deferred_fprintf(f, "      DN: ");
 	    X509_NAME_print(bio, name, XN_FLAG_RFC2253);
 	    deferred_fprintf(f, "\n");
 	    BIO_free(bio);
@@ -206,7 +206,7 @@ print_print(FILE *f, CK_LONG type, CK_VOID_PTR value, CK_ULONG size, CK_VOID_PTR
     CK_BYTE  c;
 
     if((CK_LONG)size != -1) {
-	deferred_fprintf(f, "%s\n    ", buf_spec(value, size));
+	deferred_fprintf(f, "%s\n      ", buf_spec(value, size));
 	for(i = 0; i < size; i += j) {
 	    for(j = 0; ((i + j < size) && (j < 32)); j++) {
 		if (((j % 4) == 0) && (j != 0))
@@ -214,7 +214,7 @@ print_print(FILE *f, CK_LONG type, CK_VOID_PTR value, CK_ULONG size, CK_VOID_PTR
 		c = ((CK_BYTE *)value)[i+j];
 		deferred_fprintf(f, "%02X", c);
 	    }
-	    deferred_fprintf(f, "\n    ");
+	    deferred_fprintf(f, "\n      ");
 
 	    for(j = 0; ((i + j < size) && (j < 32)); j++) {
 		if (((j % 4) == 0) && (j != 0))
@@ -227,7 +227,7 @@ print_print(FILE *f, CK_LONG type, CK_VOID_PTR value, CK_ULONG size, CK_VOID_PTR
 	    }
 	}
 	if(j == 32)
-	    deferred_fprintf(f, "\n    ");
+	    deferred_fprintf(f, "\n      ");
     }
     else {
 	deferred_fprintf(f, "EMPTY");
@@ -828,7 +828,7 @@ lookup_enum(CK_ULONG type, CK_ULONG value)
 void
 show_error( FILE *f, char *str, CK_RV rc )
 {
-    deferred_fprintf(f, "%s returned:  %ld %s", str, (unsigned long) rc, lookup_enum ( RV_T, rc ));
+    deferred_fprintf(f, "      %s returned:  %ld %s", str, (unsigned long) rc, lookup_enum ( RV_T, rc ));
     deferred_fprintf(f, "\n");
 }
 
@@ -851,10 +851,10 @@ print_slot_list(FILE *f, CK_SLOT_ID_PTR pSlotList, CK_ULONG ulCount)
 
     if(pSlotList) {
 	for (i = 0; i < ulCount; i++)
-	    deferred_fprintf(f, "Slot %ld\n", pSlotList[i]);
+	    deferred_fprintf(f, "      Slot %ld\n", pSlotList[i]);
     }
     else {
-	deferred_fprintf(f, "Count is %ld\n", ulCount);
+	deferred_fprintf(f, "      Count is %ld\n", ulCount);
     }
 }
 
@@ -941,13 +941,13 @@ print_mech_list(FILE *f, CK_MECHANISM_TYPE_PTR pMechanismList, CK_ULONG ulMechCo
 	for (imech = 0; imech < ulMechCount; imech++) {
 	    const char *name = lookup_enum(MEC_T, pMechanismList[imech]);
 	    if (name)
-		deferred_fprintf(f, "%30s \n", name);
+		deferred_fprintf(f, "      %30s \n", name);
 	    else
-		deferred_fprintf(f, " Unknown Mechanism (%08lx)  \n", pMechanismList[imech]);
+		deferred_fprintf(f, "      Unknown Mechanism (%08lx)  \n", pMechanismList[imech]);
 	}
     }
     else {
-	deferred_fprintf(f, "Count is %ld\n", ulMechCount);
+	deferred_fprintf(f, "      Count is %ld\n", ulMechCount);
     }
 }
 
@@ -963,9 +963,9 @@ print_mech_info(FILE *f, CK_MECHANISM_TYPE type, CK_MECHANISM_INFO_PTR minfo)
 	CKF_EC_NAMEDCURVE | CKF_EC_UNCOMPRESS | CKF_EC_COMPRESS;
 
     if (name)
-	deferred_fprintf(f, "%s : ", name);
+	deferred_fprintf(f, "      %s : ", name);
     else
-	deferred_fprintf(f, "Unknown Mechanism (%08lx) : ", type);
+	deferred_fprintf(f, "      Unknown Mechanism (%08lx) : ", type);
 
     deferred_fprintf(f, "min:%lu max:%lu flags:0x%lX ",
 	    (unsigned long) minfo->ulMinKeySize,
@@ -1005,7 +1005,7 @@ print_attribute_list(FILE *f, CK_ATTRIBUTE_PTR pTemplate, CK_ULONG  ulCount)
 	for(k = 0; k < ck_attribute_num; k++) {
 	    if(ck_attribute_specs[k].type == pTemplate[j].type) {
 		found = 1;
-		deferred_fprintf(f, "    %s ", ck_attribute_specs[k].name);
+		deferred_fprintf(f, "      %s ", ck_attribute_specs[k].name);
 		if(pTemplate[j].pValue && ((CK_LONG) pTemplate[j].ulValueLen) > 0) {
 		    ck_attribute_specs[k].display
 			(f, pTemplate[j].type, pTemplate[j].pValue,
@@ -1018,7 +1018,7 @@ print_attribute_list(FILE *f, CK_ATTRIBUTE_PTR pTemplate, CK_ULONG  ulCount)
 	    }
 	}
 	if (!found) {
-	    deferred_fprintf(f, "    CKA_? (0x%08lx)    ", pTemplate[j].type);
+	    deferred_fprintf(f, "      CKA_? (0x%08lx)    ", pTemplate[j].type);
 	    deferred_fprintf(f, "%s\n", buf_spec(pTemplate[j].pValue, pTemplate[j].ulValueLen));
 	}
     }
@@ -1036,14 +1036,14 @@ print_attribute_list_req(FILE *f, CK_ATTRIBUTE_PTR pTemplate, CK_ULONG  ulCount)
 	for(k = 0; k < ck_attribute_num; k++) {
 	    if(ck_attribute_specs[k].type == pTemplate[j].type) {
 		found = 1;
-		deferred_fprintf(f, "    %s ", ck_attribute_specs[k].name);
+		deferred_fprintf(f, "      %s ", ck_attribute_specs[k].name);
 		deferred_fprintf(f, "%s\n", buf_spec(pTemplate[j].pValue, pTemplate[j].ulValueLen));
 		k = ck_attribute_num;
 	    }
 	}
 
 	if (!found) {
-	    deferred_fprintf(f, "    CKA_? (0x%08lx)    ", pTemplate[j].type);
+	    deferred_fprintf(f, "      CKA_? (0x%08lx)    ", pTemplate[j].type);
 	    deferred_fprintf(f, "%s\n", buf_spec(pTemplate[j].pValue, pTemplate[j].ulValueLen));
 	}
     }

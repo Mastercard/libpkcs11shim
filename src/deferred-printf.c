@@ -23,6 +23,7 @@
 #include <stdbool.h>
 #include <stdarg.h>
 #include <pthread.h>
+#include <unistd.h>
 #include "threadqueue.h"
 #include "shim-config.h"
 #include "deferred-printf.h"
@@ -42,6 +43,7 @@ struct chain_t {
 
 enum message_t {
     new_message,
+    ping,
     end_thread
 };
 
@@ -73,7 +75,7 @@ static void * queue_processor(void *_ignore)
 
     while(carry_on==true) {
 	rc = thread_queue_get(&deferred_log_queue,NULL,&msg);
-	
+
 	switch((enum message_t)msg.msgtype){
 	case new_message:
 	{
@@ -81,7 +83,8 @@ static void * queue_processor(void *_ignore)
 	    struct link_t *link;
 
 	    for(link=chain->top; link;) {
-		fputs(link->buffer, link->fp); /* the real fprintf() is happening here */
+		fputs(link->buffer, link->fp);    /* the real fprintf() is happening here */
+		fflush(link->fp);                 /* flush out */
 		free(link->buffer);
 		struct link_t *next = link->next; /* remember next link before freeing */
 		free(link);			  /* free link */
@@ -91,6 +94,9 @@ static void * queue_processor(void *_ignore)
 	}
 	break;
 
+	case ping:
+	    break;
+	       
 	case end_thread:
 	default:
 	    carry_on = false;
@@ -189,6 +195,7 @@ inline void deferred_flush(void)
     struct chain_t *chain; 
 
     if (deferred_init_once_rv==0 && deferred_enabled==true) {
+
 	chain=pthread_getspecific(deferred_log_key);
 	if(chain) {
 	    thread_queue_add(&deferred_log_queue, chain, new_message);
@@ -218,4 +225,44 @@ void deferred_atexit_handler(void)
     }
 }
 
+inline void deferred_lock_queue(void)
+{
+    thread_queue_lock(&deferred_log_queue);
+}
+
+inline void deferred_unlock_queue(void)
+{
+    thread_queue_unlock(&deferred_log_queue);
+}
+
+inline void deferred_wait_until_empty()
+{
+    while(thread_queue_length(&deferred_log_queue)>0) {
+	pthread_yield();
+    }
+}
+
+void deferred_revive_thread(void)
+{
+    /* we are right after a fork */
+
+    if(deferred_init_once_rv==0 && deferred_enabled==true) {
+
+        /* first cleanup deferred_log_queue. We can as no other thread is accessing this */
+	thread_queue_cleanup(&deferred_log_queue, 1);
+
+	/* second: any key-speficic data is rendered invalid - since calling thread is different */
+	/* we have ensured in the calling process that the queue was emptied                     */
+	pthread_key_create(&deferred_log_key, deferred_destructor);
+
+	/* third: restart the thread */
+	deferred_init_once_rv = thread_queue_init(&deferred_log_queue); /* create the queue */
+
+	if(deferred_init_once_rv==0) {
+	    pthread_create(&queue_processor_thread, NULL, queue_processor, NULL); /* create the worker thread */
+	    /* atexit(deferred_atexit_handler);  */
+	}
+    }
+    
+}
 /* EOF */

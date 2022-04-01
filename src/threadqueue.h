@@ -183,6 +183,10 @@ long thread_queue_length( struct threadqueue *queue );
  */
 int thread_queue_cleanup(struct threadqueue *queue, int freedata);
 
+void thread_queue_lock(struct threadqueue *queue);
+void thread_queue_unlock(struct threadqueue *queue);
+  
+
 #ifdef __cplusplus
 }
 #endif

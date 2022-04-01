@@ -61,9 +61,16 @@ enum consistency_level_t {
 };
 
 bool init_shim_config();
+void shim_config_set_pids();
+void shim_config_set_output(bool forked);
 enum consistency_level_t shim_config_consistency_level();
+bool shim_is_printing_deferred();
 FILE * shim_config_output();
+pid_t shim_config_pid();
+pid_t shim_config_ppid();
 const char * shim_config_library();
+void shim_config_logfile_prolog(bool firsttime);
+void shim_config_logfile_epilog(bool forked);
 
 
 #endif /* _SHIM_CONFIG_H_ */

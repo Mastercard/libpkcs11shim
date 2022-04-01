@@ -11,6 +11,7 @@ libpkcs11shim_la_SOURCES = 	pkcs11-shim.c \
 				deferred-printf.c deferred-printf.h \
 				threadqueue.c threadqueue.h \
 				shim-config.c shim-config.h \
+				atfork.c atfork.h \
 				pkcs11.exports
 
 libpkcs11shim_la_LDFLAGS = $(AM_LDFLAGS) \

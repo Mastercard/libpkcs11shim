@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2015 Mathias Brossard <mathias@brossard.org>
+ * Copyright (C) 2015 Mathias Brossard <mathias@brossard.or>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -26,6 +26,7 @@
 #include <sys/time.h>
 #include <time.h>
 #include <pthread.h>
+#include <pthread_np.h>
 #include <stdbool.h>
 #include <stdatomic.h>
 #include <stdint.h>
@@ -35,6 +36,7 @@
 #include "libpkcs11.h"
 #include "deferred-printf.h"
 #include "shim-config.h"
+#include "pkcs11-shim.h"
 
 #define __PASTE(x,y)      x##y
 
@@ -72,47 +74,58 @@ pthread_once_t init_shim_invoked = PTHREAD_ONCE_INIT;
 /* result of init_shim */
 static CK_RV init_shim_rv = CKR_OK;
 
+/* atomic counter (global to a process) */
+static atomic_size_t cnt = 0;
+
+/* utility : compute difference between two timevals */
+/* x is always < y, and returned in result */
+static void timeval_substract(struct timeval *result, struct timeval *x, struct timeval *y)
+{
+    result->tv_sec = y->tv_sec - x->tv_sec;
+    result->tv_usec = y->tv_usec - x->tv_usec;
+
+    if(result->tv_usec<0) {
+	result->tv_usec += 1000000;
+	result->tv_sec -=1;
+    }
+}
 
 /* prelude */
-static void enter(const char *function)
+static void enter(const char *function, struct timeval *tv)
 {
-    static atomic_size_t cnt = 0;
     struct tm *tm;
     struct tm threadlocal_tm;		/* used by localtime_r() */
-    struct timeval tv;
-    pid_t me_process;
-    pthread_t me_thread;
     char time_string[40];
 
-    gettimeofday (&tv, NULL);
-    tm = localtime_r(&tv.tv_sec, &threadlocal_tm);
+    gettimeofday (tv, NULL);
+    tm = localtime_r(&tv->tv_sec, &threadlocal_tm);
     strftime (time_string, sizeof(time_string), "%F %H:%M:%S", tm);
-    me_process = getpid();
-    me_thread = pthread_self();
 
     if(use_print_mutex) pthread_mutex_lock(&print_mutex);
 
     deferred_fprintf(shim_config_output(), CNTSTRING, cnt, function);
-    deferred_fprintf(shim_config_output(), "[pid] %ld\n", me_process);
-    deferred_fprintf(shim_config_output(), "[tid] %ld\n", me_thread);
-    deferred_fprintf(shim_config_output(), "[tic] %s.%03ld\n", time_string, (long)tv.tv_usec / 1000);
+    deferred_fprintf(shim_config_output(), "[pid] %ld\n", shim_config_pid());
+    deferred_fprintf(shim_config_output(), "[ppd] %ld\n", shim_config_ppid());
+    deferred_fprintf(shim_config_output(), "[tid] %ld\n", pthread_getthreadid_np());
+    deferred_fprintf(shim_config_output(), "[tic] %s.%06ld\n", time_string, (long)tv->tv_usec);
     /* we are just incrementing a counter, the relaxed memory model can be safely used */
     atomic_fetch_add_explicit(&cnt, 1, memory_order_relaxed);
 }
 
 /* postcall */
-static CK_RV retne(CK_RV rv)
+static CK_RV retne(CK_RV rv, struct timeval *prev_tv)
 {
     struct tm *tm;
-    struct timeval tv;
+    struct timeval tv, elapsed;
     char time_string[40];
     struct tm threadlocal_tm;		/* used by localtime_r() */
 
     gettimeofday (&tv, NULL);
     tm = localtime_r(&tv.tv_sec, &threadlocal_tm);
     strftime (time_string, sizeof(time_string), "%F %H:%M:%S", tm);
-
-    deferred_fprintf(shim_config_output(), "[toc] %s.%03ld\n", time_string, (long)tv.tv_usec / 1000);
+    deferred_fprintf(shim_config_output(), "[toc] %s.%06ld\n", time_string, (long)tv.tv_usec);
+    timeval_substract(&elapsed, prev_tv, &tv);
+    deferred_fprintf(shim_config_output(), "[lap] %ld.%06ld\n", (long)elapsed.tv_sec, (long)elapsed.tv_usec);    
     deferred_fprintf(shim_config_output(), "[ret] %ld %s\n", (unsigned long) rv, lookup_enum ( RV_T, rv ));
     deferred_flush();
     if(use_print_mutex) pthread_mutex_unlock(&print_mutex);
@@ -198,9 +211,11 @@ CK_RV C_GetFunctionList
 	    return rv;
     }
 
-    enter("C_GetFunctionList");
+    struct timeval t;
+
+    enter("C_GetFunctionList", &t);
     *ppFunctionList = pkcs11_shim;
-    return retne(CKR_OK);
+    return retne(CKR_OK, &t);
 }
 
 CK_RV
@@ -215,7 +230,9 @@ shim_C_Initialize(CK_VOID_PTR pInitArgs)
 	    return rv;
     }
 
-    enter("C_Initialize");
+    struct timeval t;
+
+    enter("C_Initialize", &t);
     print_ptr_in("pInitArgs", pInitArgs);
 
     if (pInitArgs) {
@@ -228,31 +245,33 @@ shim_C_Initialize(CK_VOID_PTR pInitArgs)
     }
 
     rv = po->C_Initialize(pInitArgs);
-    return retne(rv);
+    return retne(rv, &t);
 }
 
 CK_RV
 shim_C_Finalize(CK_VOID_PTR pReserved)
 {
     CK_RV rv;
+    struct timeval t;
 
-    enter("C_Finalize");
+    enter("C_Finalize", &t);
     rv = po->C_Finalize(pReserved);
-    return retne(rv);
+    return retne(rv, &t);
 }
 
 CK_RV
 shim_C_GetInfo(CK_INFO_PTR pInfo)
 {
     CK_RV rv;
+    struct timeval t;
 
-    enter("C_GetInfo");
+    enter("C_GetInfo", &t);
     rv = po->C_GetInfo(pInfo);
     if(rv == CKR_OK) {
 	shim_dump_desc_out("pInfo");
 	print_ck_info(shim_config_output(), pInfo);
     }
-    return retne(rv);
+    return retne(rv, &t);
 }
 
 CK_RV
@@ -260,8 +279,9 @@ shim_C_GetSlotList(CK_BBOOL tokenPresent, CK_SLOT_ID_PTR pSlotList,
 		   CK_ULONG_PTR pulCount)
 {
     CK_RV rv;
+    struct timeval t;
 
-    enter("C_GetSlotList");
+    enter("C_GetSlotList", &t);
     shim_dump_ulong_in("tokenPresent", tokenPresent);
     rv = po->C_GetSlotList(tokenPresent, pSlotList, pulCount);
     if(rv == CKR_OK) {
@@ -269,22 +289,23 @@ shim_C_GetSlotList(CK_BBOOL tokenPresent, CK_SLOT_ID_PTR pSlotList,
 	print_slot_list(shim_config_output(), pSlotList, *pulCount);
 	shim_dump_ulong_out("*pulCount", *pulCount);
     }
-    return retne(rv);
+    return retne(rv, &t);
 }
 
 CK_RV
 shim_C_GetSlotInfo(CK_SLOT_ID slotID, CK_SLOT_INFO_PTR pInfo)
 {
     CK_RV rv;
+    struct timeval t;
 
-    enter("C_GetSlotInfo");
+    enter("C_GetSlotInfo", &t);
     shim_dump_ulong_in("slotID", slotID);
     rv = po->C_GetSlotInfo(slotID, pInfo);
     if(rv == CKR_OK) {
 	shim_dump_desc_out("pInfo");
 	print_slot_info(shim_config_output(), pInfo);
     }
-    return retne(rv);
+    return retne(rv,&t);
 }
 
 CK_RV
@@ -292,15 +313,16 @@ shim_C_GetTokenInfo(CK_SLOT_ID slotID,
 		    CK_TOKEN_INFO_PTR pInfo)
 {
     CK_RV rv;
+    struct timeval t;
 
-    enter("C_GetTokenInfo");
+    enter("C_GetTokenInfo",&t);
     shim_dump_ulong_in("slotID", slotID);
     rv = po->C_GetTokenInfo(slotID, pInfo);
     if(rv == CKR_OK) {
 	shim_dump_desc_out("pInfo");
 	print_token_info(shim_config_output(), pInfo);
     }
-    return retne(rv);
+    return retne(rv,&t);
 }
 
 CK_RV
@@ -308,15 +330,16 @@ shim_C_GetMechanismList(CK_SLOT_ID  slotID, CK_MECHANISM_TYPE_PTR pMechanismList
 			CK_ULONG_PTR  pulCount)
 {
     CK_RV rv;
+    struct timeval t;
 
-    enter("C_GetMechanismList");
+    enter("C_GetMechanismList", &t);
     shim_dump_ulong_in("slotID", slotID);
     rv = po->C_GetMechanismList(slotID, pMechanismList, pulCount);
     if(rv == CKR_OK) {
 	shim_dump_array_out("pMechanismList", *pulCount);
 	print_mech_list(shim_config_output(), pMechanismList, *pulCount);
     }
-    return retne(rv);
+    return retne(rv,&t);
 }
 
 CK_RV
@@ -325,8 +348,9 @@ shim_C_GetMechanismInfo(CK_SLOT_ID  slotID, CK_MECHANISM_TYPE type,
 {
     CK_RV rv;
     const char *name = lookup_enum(MEC_T, type);
+    struct timeval t;
 
-    enter("C_GetMechanismInfo");
+    enter("C_GetMechanismInfo",&t);
     shim_dump_ulong_in("slotID", slotID);
     if (name)
 	deferred_fprintf(shim_config_output(), SPACER "%30s \n", name);
@@ -338,7 +362,7 @@ shim_C_GetMechanismInfo(CK_SLOT_ID  slotID, CK_MECHANISM_TYPE type,
 	shim_dump_desc_out("pInfo");
 	print_mech_info(shim_config_output(), type, pInfo);
     }
-    return retne(rv);
+    return retne(rv,&t);
 }
 
 CK_RV
@@ -346,25 +370,27 @@ shim_C_InitToken (CK_SLOT_ID slotID, CK_UTF8CHAR_PTR pPin, CK_ULONG ulPinLen,
 		  CK_UTF8CHAR_PTR pLabel)
 {
     CK_RV rv;
+    struct timeval t;
 
-    enter("C_InitToken");
+    enter("C_InitToken",&t);
     shim_dump_ulong_in("slotID", slotID);
     shim_dump_string_in("pPin[ulPinLen]", pPin, ulPinLen);
     shim_dump_string_in("pLabel[32]", pLabel, 32);
     rv = po->C_InitToken (slotID, pPin, ulPinLen, pLabel);
-    return retne(rv);
+    return retne(rv,&t);
 }
 
 CK_RV
 shim_C_InitPIN(CK_SESSION_HANDLE hSession, CK_UTF8CHAR_PTR pPin, CK_ULONG  ulPinLen)
 {
     CK_RV rv;
+    struct timeval t;
 
-    enter("C_InitPIN");
+    enter("C_InitPIN", &t);
     shim_dump_ulong_in("hSession", hSession);
     shim_dump_string_in("pPin[ulPinLen]", pPin, ulPinLen);
     rv = po->C_InitPIN(hSession, pPin, ulPinLen);
-    return retne(rv);
+    return retne(rv,&t);
 }
 
 CK_RV
@@ -372,13 +398,14 @@ shim_C_SetPIN(CK_SESSION_HANDLE hSession, CK_UTF8CHAR_PTR pOldPin, CK_ULONG  ulO
 	      CK_UTF8CHAR_PTR pNewPin, CK_ULONG  ulNewLen)
 {
     CK_RV rv;
+    struct timeval t;
 
-    enter("C_SetPIN");
+    enter("C_SetPIN", &t);
     shim_dump_ulong_in("hSession", hSession);
     shim_dump_string_in("pOldPin[ulOldLen]", pOldPin, ulOldLen);
     shim_dump_string_in("pNewPin[ulNewLen]", pNewPin, ulNewLen);
     rv = po->C_SetPIN(hSession, pOldPin, ulOldLen, pNewPin, ulNewLen);
-    return retne(rv);
+    return retne(rv,&t);
 }
 
 CK_RV
@@ -386,51 +413,56 @@ shim_C_OpenSession(CK_SLOT_ID  slotID, CK_FLAGS  flags, CK_VOID_PTR  pApplicatio
 		   CK_NOTIFY  Notify, CK_SESSION_HANDLE_PTR phSession)
 {
     CK_RV rv;
+    struct timeval t;
 
-    enter("C_OpenSession");
+    enter("C_OpenSession", &t);
     shim_dump_ulong_in("slotID", slotID);
     shim_dump_ulong_in("flags", flags);
     deferred_fprintf(shim_config_output(), SPACER "pApplication=%p\n", pApplication);
     deferred_fprintf(shim_config_output(), SPACER "Notify=%p\n", (void *)Notify);
     rv = po->C_OpenSession(slotID, flags, pApplication, Notify, phSession);
     shim_dump_ulong_out("*phSession", *phSession);
-    return retne(rv);
+    return retne(rv,&t);
 }
 
 CK_RV
 shim_C_CloseSession(CK_SESSION_HANDLE hSession)
 {
     CK_RV rv;
+    struct timeval t;
 
-    enter("C_CloseSession");
+    enter("C_CloseSession", &t);
     shim_dump_ulong_in("hSession", hSession);
     rv = po->C_CloseSession(hSession);
-    return retne(rv);
+    return retne(rv,&t);
 }
 
 CK_RV
 shim_C_CloseAllSessions(CK_SLOT_ID slotID)
 {
     CK_RV rv;
-    enter("C_CloseAllSessions");
+    struct timeval t;
+
+    enter("C_CloseAllSessions",&t);
     shim_dump_ulong_in("slotID", slotID);
     rv = po->C_CloseAllSessions(slotID);
-    return retne(rv);
+    return retne(rv,&t);
 }
 
 CK_RV
 shim_C_GetSessionInfo(CK_SESSION_HANDLE hSession, CK_SESSION_INFO_PTR pInfo)
 {
     CK_RV rv;
+    struct timeval t;
 
-    enter("C_GetSessionInfo");
+    enter("C_GetSessionInfo",&t);
     shim_dump_ulong_in("hSession", hSession);
     rv = po->C_GetSessionInfo(hSession, pInfo);
     if(rv == CKR_OK) {
 	shim_dump_desc_out("pInfo");
 	print_session_info(shim_config_output(), pInfo);
     }
-    return retne(rv);
+    return retne(rv,&t);
 }
 
 CK_RV
@@ -438,13 +470,14 @@ shim_C_GetOperationState(CK_SESSION_HANDLE hSession, CK_BYTE_PTR pOperationState
 			 CK_ULONG_PTR pulOperationStateLen)
 {
     CK_RV rv;
+    struct timeval t;
 
-    enter("C_GetOperationState");
+    enter("C_GetOperationState",&t);
     shim_dump_ulong_in("hSession", hSession);
     rv = po->C_GetOperationState(hSession, pOperationState, pulOperationStateLen);
     if (rv == CKR_OK)
 	shim_dump_string_out("pOperationState[*pulOperationStateLen]", pOperationState, *pulOperationStateLen);
-    return retne(rv);
+    return retne(rv,&t);
 }
 
 CK_RV
@@ -452,15 +485,16 @@ shim_C_SetOperationState(CK_SESSION_HANDLE hSession, CK_BYTE_PTR pOperationState
 			 CK_OBJECT_HANDLE hEncryptionKey, CK_OBJECT_HANDLE hAuthenticationKey)
 {
     CK_RV rv;
+    struct timeval t;
 
-    enter("SetOperationState");
+    enter("SetOperationState",&t);
     shim_dump_ulong_in("hSession", hSession);
     shim_dump_string_in("pOperationState[ulOperationStateLen]", pOperationState, ulOperationStateLen);
     shim_dump_ulong_in("hEncryptionKey", hEncryptionKey);
     shim_dump_ulong_in("hAuthenticationKey", hAuthenticationKey);
     rv = po->C_SetOperationState(hSession, pOperationState, ulOperationStateLen,
 				 hEncryptionKey, hAuthenticationKey);
-    return retne(rv);
+    return retne(rv,&t);
 }
 
 CK_RV
@@ -468,24 +502,27 @@ shim_C_Login(CK_SESSION_HANDLE hSession, CK_USER_TYPE userType,
 	     CK_UTF8CHAR_PTR pPin, CK_ULONG  ulPinLen)
 {
     CK_RV rv;
+    struct timeval t;
 
-    enter("C_Login");
+    enter("C_Login",&t);
     shim_dump_ulong_in("hSession", hSession);
     deferred_fprintf(shim_config_output(), "[in ] userType = %s\n",
 	    lookup_enum(USR_T, userType));
     shim_dump_string_in("pPin[ulPinLen]", pPin, ulPinLen);
     rv = po->C_Login(hSession, userType, pPin, ulPinLen);
-    return retne(rv);
+    return retne(rv,&t);
 }
 
 CK_RV
 shim_C_Logout(CK_SESSION_HANDLE hSession)
 {
     CK_RV rv;
-    enter("C_Logout");
+    struct timeval t;
+
+    enter("C_Logout",&t);
     shim_dump_ulong_in("hSession", hSession);
     rv = po->C_Logout(hSession);
-    return retne(rv);
+    return retne(rv,&t);
 }
 
 CK_RV
@@ -493,14 +530,15 @@ shim_C_CreateObject(CK_SESSION_HANDLE hSession, CK_ATTRIBUTE_PTR pTemplate, CK_U
 		    CK_OBJECT_HANDLE_PTR phObject)
 {
     CK_RV rv;
+    struct timeval t;
 
-    enter("C_CreateObject");
+    enter("C_CreateObject",&t);
     shim_dump_ulong_in("hSession", hSession);
     shim_attribute_list_in("pTemplate", pTemplate, ulCount);
     rv = po->C_CreateObject(hSession, pTemplate, ulCount, phObject);
     if (rv == CKR_OK)
 	shim_dump_ulong_out("*phObject", *phObject);
-    return retne(rv);
+    return retne(rv,&t);
 }
 
 CK_RV
@@ -511,8 +549,9 @@ shim_C_CopyObject(CK_SESSION_HANDLE hSession,
 		  CK_OBJECT_HANDLE_PTR phNewObject)
 {
     CK_RV rv;
+    struct timeval t;
 
-    enter("C_CopyObject");
+    enter("C_CopyObject",&t);
     shim_dump_ulong_in("hSession", hSession);
     shim_dump_ulong_in("hObject", hObject);
     shim_attribute_list_in("pTemplate", pTemplate, ulCount);
@@ -520,34 +559,36 @@ shim_C_CopyObject(CK_SESSION_HANDLE hSession,
     if (rv == CKR_OK)
 	shim_dump_ulong_out("*phNewObject", *phNewObject);
 
-    return retne(rv);
+    return retne(rv,&t);
 }
 
 CK_RV
 shim_C_DestroyObject(CK_SESSION_HANDLE hSession, CK_OBJECT_HANDLE hObject)
 {
     CK_RV rv;
+    struct timeval t;
 
-    enter("C_DestroyObject");
+    enter("C_DestroyObject",&t);
     shim_dump_ulong_in("hSession", hSession);
     shim_dump_ulong_in("hObject", hObject);
     rv = po->C_DestroyObject(hSession, hObject);
-    return retne(rv);
+    return retne(rv,&t);
 }
 
 CK_RV
 shim_C_GetObjectSize(CK_SESSION_HANDLE hSession, CK_OBJECT_HANDLE hObject, CK_ULONG_PTR pulSize)
 {
     CK_RV rv;
+    struct timeval t;
 
-    enter("C_GetObjectSize");
+    enter("C_GetObjectSize",&t);
     shim_dump_ulong_in("hSession", hSession);
     shim_dump_ulong_in("hObject", hObject);
     rv = po->C_GetObjectSize(hSession, hObject, pulSize);
     if (rv == CKR_OK)
 	shim_dump_ulong_out("*pulSize", *pulSize);
 
-    return retne(rv);
+    return retne(rv,&t);
 }
 
 CK_RV
@@ -555,8 +596,9 @@ shim_C_GetAttributeValue(CK_SESSION_HANDLE hSession, CK_OBJECT_HANDLE hObject,
 			 CK_ATTRIBUTE_PTR pTemplate, CK_ULONG  ulCount)
 {
     CK_RV rv;
+    struct timeval t;
 
-    enter("C_GetAttributeValue");
+    enter("C_GetAttributeValue",&t);
     shim_dump_ulong_in("hSession", hSession);
     shim_dump_ulong_in("hObject", hObject);
     shim_attribute_req_in("pTemplate", pTemplate, ulCount);
@@ -571,7 +613,7 @@ shim_C_GetAttributeValue(CK_SESSION_HANDLE hSession, CK_OBJECT_HANDLE hObject,
     if (rv == CKR_OK || rv == CKR_ATTRIBUTE_SENSITIVE ||
 	rv == CKR_ATTRIBUTE_TYPE_INVALID || rv == CKR_BUFFER_TOO_SMALL)
 	shim_attribute_list_out("pTemplate", pTemplate, ulCount);
-    return retne(rv);
+    return retne(rv,&t);
 }
 
 CK_RV
@@ -579,25 +621,27 @@ shim_C_SetAttributeValue(CK_SESSION_HANDLE hSession, CK_OBJECT_HANDLE hObject,
 			 CK_ATTRIBUTE_PTR pTemplate, CK_ULONG  ulCount)
 {
     CK_RV rv;
+    struct timeval t;
 
-    enter("C_SetAttributeValue");
+    enter("C_SetAttributeValue",&t);
     shim_dump_ulong_in("hSession", hSession);
     shim_dump_ulong_in("hObject", hObject);
     shim_attribute_list_in("pTemplate", pTemplate, ulCount);
     rv = po->C_SetAttributeValue(hSession, hObject, pTemplate, ulCount);
-    return retne(rv);
+    return retne(rv,&t);
 }
 
 CK_RV
 shim_C_FindObjectsInit(CK_SESSION_HANDLE hSession, CK_ATTRIBUTE_PTR pTemplate, CK_ULONG  ulCount)
 {
     CK_RV rv;
+    struct timeval t;
 
-    enter("C_FindObjectsInit");
+    enter("C_FindObjectsInit",&t);
     shim_dump_ulong_in("hSession", hSession);
     shim_attribute_list_in("pTemplate", pTemplate, ulCount);
     rv = po->C_FindObjectsInit(hSession, pTemplate, ulCount);
-    return retne(rv);
+    return retne(rv,&t);
 }
 
 CK_RV
@@ -605,8 +649,9 @@ shim_C_FindObjects(CK_SESSION_HANDLE hSession, CK_OBJECT_HANDLE_PTR phObject, CK
 		   CK_ULONG_PTR  pulObjectCount)
 {
     CK_RV rv;
+    struct timeval t;
 
-    enter("C_FindObjects");
+    enter("C_FindObjects",&t);
     shim_dump_ulong_in("hSession", hSession);
     shim_dump_ulong_in("ulMaxObjectCount", ulMaxObjectCount);
     rv = po->C_FindObjects(hSession, phObject, ulMaxObjectCount, pulObjectCount);
@@ -616,26 +661,28 @@ shim_C_FindObjects(CK_SESSION_HANDLE hSession, CK_OBJECT_HANDLE_PTR phObject, CK
 	for (i = 0; i < *pulObjectCount; i++)
 	    deferred_fprintf(shim_config_output(), SPACER "Object 0x%lx matches\n", phObject[i]);
     }
-    return retne(rv);
+    return retne(rv,&t);
 }
 
 CK_RV
 shim_C_FindObjectsFinal(CK_SESSION_HANDLE hSession)
 {
     CK_RV rv;
+    struct timeval t;
 
-    enter("C_FindObjectsFinal");
+    enter("C_FindObjectsFinal",&t);
     shim_dump_ulong_in("hSession", hSession);
     rv = po->C_FindObjectsFinal(hSession);
-    return retne(rv);
+    return retne(rv,&t);
 }
 
 CK_RV
 shim_C_EncryptInit(CK_SESSION_HANDLE hSession, CK_MECHANISM_PTR pMechanism, CK_OBJECT_HANDLE hKey)
 {
     CK_RV rv;
+    struct timeval t;
 
-    enter("C_EncryptInit");
+    enter("C_EncryptInit",&t);
     shim_dump_ulong_in("hSession", hSession);
     deferred_fprintf(shim_config_output(), SPACER "pMechanism->type=%s\n", lookup_enum(MEC_T, pMechanism->mechanism));
     switch (pMechanism->mechanism) {
@@ -676,7 +723,7 @@ shim_C_EncryptInit(CK_SESSION_HANDLE hSession, CK_MECHANISM_PTR pMechanism, CK_O
     }
     shim_dump_ulong_in("hKey", hKey);
     rv = po->C_EncryptInit(hSession, pMechanism, hKey);
-    return retne(rv);
+    return retne(rv,&t);
 }
 
 CK_RV
@@ -684,14 +731,15 @@ shim_C_Encrypt(CK_SESSION_HANDLE hSession, CK_BYTE_PTR pData, CK_ULONG  ulDataLe
 	       CK_BYTE_PTR pEncryptedData, CK_ULONG_PTR pulEncryptedDataLen)
 {
     CK_RV rv;
+    struct timeval t;
 
-    enter("C_Encrypt");
+    enter("C_Encrypt",&t);
     shim_dump_ulong_in("hSession", hSession);
     shim_dump_string_in("pData[ulDataLen]", pData, ulDataLen);
     rv = po->C_Encrypt(hSession, pData, ulDataLen, pEncryptedData, pulEncryptedDataLen);
     if (rv == CKR_OK)
 	shim_dump_string_out("pEncryptedData[*pulEncryptedDataLen]", pEncryptedData, *pulEncryptedDataLen);
-    return retne(rv);
+    return retne(rv,&t);
 }
 
 CK_RV
@@ -699,37 +747,40 @@ shim_C_EncryptUpdate(CK_SESSION_HANDLE hSession, CK_BYTE_PTR pPart, CK_ULONG  ul
 		     CK_BYTE_PTR pEncryptedPart, CK_ULONG_PTR pulEncryptedPartLen)
 {
     CK_RV rv;
+    struct timeval t;
 
-    enter("C_EncryptUpdate");
+    enter("C_EncryptUpdate",&t);
     shim_dump_ulong_in("hSession", hSession);
     shim_dump_string_in("pPart[ulPartLen]", pPart, ulPartLen);
     rv = po->C_EncryptUpdate(hSession, pPart, ulPartLen, pEncryptedPart, pulEncryptedPartLen);
     if (rv == CKR_OK)
 	shim_dump_string_out("pEncryptedPart[*pulEncryptedPartLen]", pEncryptedPart, *pulEncryptedPartLen);
-    return retne(rv);
+    return retne(rv,&t);
 }
 
 CK_RV
 shim_C_EncryptFinal(CK_SESSION_HANDLE hSession, CK_BYTE_PTR pLastEncryptedPart, CK_ULONG_PTR pulLastEncryptedPartLen)
 {
     CK_RV rv;
+    struct timeval t;
 
-    enter("C_EncryptFinal");
+    enter("C_EncryptFinal",&t);
     shim_dump_ulong_in("hSession", hSession);
     rv = po->C_EncryptFinal(hSession, pLastEncryptedPart, pulLastEncryptedPartLen);
     if (rv == CKR_OK)
 	shim_dump_string_out("pLastEncryptedPart[*pulLastEncryptedPartLen]", pLastEncryptedPart,
 			     *pulLastEncryptedPartLen);
 
-    return retne(rv);
+    return retne(rv,&t);
 }
 
 CK_RV
 shim_C_DecryptInit(CK_SESSION_HANDLE hSession, CK_MECHANISM_PTR pMechanism, CK_OBJECT_HANDLE hKey)
 {
     CK_RV rv;
+    struct timeval t;
 
-    enter("C_DecryptInit");
+    enter("C_DecryptInit",&t);
     shim_dump_ulong_in("hSession", hSession);
     deferred_fprintf(shim_config_output(), SPACER "pMechanism->type=%s\n", lookup_enum(MEC_T, pMechanism->mechanism));
     switch (pMechanism->mechanism) {
@@ -770,7 +821,7 @@ shim_C_DecryptInit(CK_SESSION_HANDLE hSession, CK_MECHANISM_PTR pMechanism, CK_O
     }
     shim_dump_ulong_in("hKey", hKey);
     rv = po->C_DecryptInit(hSession, pMechanism, hKey);
-    return retne(rv);
+    return retne(rv,&t);
 }
 
 CK_RV
@@ -778,15 +829,16 @@ shim_C_Decrypt(CK_SESSION_HANDLE hSession, CK_BYTE_PTR pEncryptedData, CK_ULONG 
 	       CK_BYTE_PTR pData, CK_ULONG_PTR pulDataLen)
 {
     CK_RV rv;
+    struct timeval t;
 
-    enter("C_Decrypt");
+    enter("C_Decrypt",&t);
     shim_dump_ulong_in("hSession", hSession);
     shim_dump_string_in("pEncryptedData[ulEncryptedDataLen]", pEncryptedData, ulEncryptedDataLen);
     rv = po->C_Decrypt(hSession, pEncryptedData, ulEncryptedDataLen, pData, pulDataLen);
     if (rv == CKR_OK)
 	shim_dump_string_out("pData[*pulDataLen]", pData, *pulDataLen);
 
-    return retne(rv);
+    return retne(rv,&t);
 }
 
 CK_RV
@@ -794,41 +846,44 @@ shim_C_DecryptUpdate(CK_SESSION_HANDLE hSession, CK_BYTE_PTR pEncryptedPart, CK_
 		     CK_BYTE_PTR pPart, CK_ULONG_PTR pulPartLen)
 {
     CK_RV rv;
+    struct timeval t;
 
-    enter("C_DecryptUpdate");
+    enter("C_DecryptUpdate",&t);
     shim_dump_ulong_in("hSession", hSession);
     shim_dump_string_in("pEncryptedPart[ulEncryptedPartLen]", pEncryptedPart, ulEncryptedPartLen);
     rv = po->C_DecryptUpdate(hSession, pEncryptedPart, ulEncryptedPartLen, pPart, pulPartLen);
     if (rv == CKR_OK)
 	shim_dump_string_out("pPart[*pulPartLen]", pPart, *pulPartLen);
 
-    return retne(rv);
+    return retne(rv,&t);
 }
 
 CK_RV
 shim_C_DecryptFinal(CK_SESSION_HANDLE hSession, CK_BYTE_PTR pLastPart, CK_ULONG_PTR pulLastPartLen)
 {
     CK_RV rv;
+    struct timeval t;
 
-    enter("C_DecryptFinal");
+    enter("C_DecryptFinal",&t);
     shim_dump_ulong_in("hSession", hSession);
     rv = po->C_DecryptFinal(hSession, pLastPart, pulLastPartLen);
     if (rv == CKR_OK)
 	shim_dump_string_out("pLastPart[*pulLastPartLen]", pLastPart, *pulLastPartLen);
 
-    return retne(rv);
+    return retne(rv,&t);
 }
 
 CK_RV
 shim_C_DigestInit(CK_SESSION_HANDLE hSession, CK_MECHANISM_PTR pMechanism)
 {
     CK_RV rv;
+    struct timeval t;
 
-    enter("C_DigestInit");
+    enter("C_DigestInit",&t);
     shim_dump_ulong_in("hSession", hSession);
     deferred_fprintf(shim_config_output(), SPACER  "pMechanism->type=%s\n", lookup_enum(MEC_T, pMechanism->mechanism));
     rv = po->C_DigestInit(hSession, pMechanism);
-    return retne(rv);
+    return retne(rv,&t);
 }
 
 CK_RV
@@ -836,61 +891,66 @@ shim_C_Digest(CK_SESSION_HANDLE hSession, CK_BYTE_PTR pData, CK_ULONG  ulDataLen
 	      CK_BYTE_PTR pDigest, CK_ULONG_PTR pulDigestLen)
 {
     CK_RV rv;
+    struct timeval t;
 
-    enter("C_Digest");
+    enter("C_Digest",&t);
     shim_dump_ulong_in("hSession", hSession);
     shim_dump_string_in("pData[ulDataLen]", pData, ulDataLen);
     rv = po->C_Digest(hSession, pData, ulDataLen, pDigest, pulDigestLen);
     if (rv == CKR_OK)
 	shim_dump_string_out("pDigest[*pulDigestLen]", pDigest, *pulDigestLen);
 
-    return retne(rv);
+    return retne(rv,&t);
 }
 
 CK_RV
 shim_C_DigestUpdate(CK_SESSION_HANDLE hSession, CK_BYTE_PTR pPart, CK_ULONG  ulPartLen)
 {
     CK_RV rv;
+    struct timeval t;
 
-    enter("C_DigestUpdate");
+    enter("C_DigestUpdate",&t);
     shim_dump_ulong_in("hSession", hSession);
     shim_dump_string_in("pPart[ulPartLen]", pPart, ulPartLen);
     rv = po->C_DigestUpdate(hSession, pPart, ulPartLen);
-    return retne(rv);
+    return retne(rv,&t);
 }
 
 CK_RV
 shim_C_DigestKey(CK_SESSION_HANDLE hSession, CK_OBJECT_HANDLE hKey)
 {
     CK_RV rv;
+    struct timeval t;
 
-    enter("C_DigestKey");
+    enter("C_DigestKey",&t);
     shim_dump_ulong_in("hSession", hSession);
     shim_dump_ulong_in("hKey", hKey);
     rv = po->C_DigestKey(hSession, hKey);
-    return retne(rv);
+    return retne(rv,&t);
 }
 
 CK_RV
 shim_C_DigestFinal(CK_SESSION_HANDLE hSession, CK_BYTE_PTR pDigest, CK_ULONG_PTR pulDigestLen)
 {
     CK_RV rv;
+    struct timeval t;
 
-    enter("C_DigestFinal");
+    enter("C_DigestFinal",&t);
     shim_dump_ulong_in("hSession", hSession);
     rv = po->C_DigestFinal(hSession, pDigest, pulDigestLen);
     if (rv == CKR_OK)
 	shim_dump_string_out("pDigest[*pulDigestLen]", pDigest, *pulDigestLen);
 
-    return retne(rv);
+    return retne(rv,&t);
 }
 
 CK_RV
 shim_C_SignInit(CK_SESSION_HANDLE hSession, CK_MECHANISM_PTR pMechanism, CK_OBJECT_HANDLE hKey)
 {
     CK_RV rv;
+    struct timeval t;
 
-    enter("C_SignInit");
+    enter("C_SignInit",&t);
     shim_dump_ulong_in("hSession", hSession);
     deferred_fprintf(shim_config_output(), SPACER  "pMechanism->type=%s\n", lookup_enum(MEC_T, pMechanism->mechanism));
     shim_dump_string_in("pMechanism->pParameter[pMechanism->ulParameterLen]", pMechanism->pParameter, pMechanism->ulParameterLen);
@@ -917,7 +977,7 @@ shim_C_SignInit(CK_SESSION_HANDLE hSession, CK_MECHANISM_PTR pMechanism, CK_OBJE
     }
     shim_dump_ulong_in("hKey", hKey);
     rv = po->C_SignInit(hSession, pMechanism, hKey);
-    return retne(rv);
+    return retne(rv,&t);
 }
 
 CK_RV
@@ -925,55 +985,59 @@ shim_C_Sign(CK_SESSION_HANDLE hSession, CK_BYTE_PTR pData, CK_ULONG  ulDataLen,
 	    CK_BYTE_PTR pSignature, CK_ULONG_PTR pulSignatureLen)
 {
     CK_RV rv;
+    struct timeval t;
 
-    enter("C_Sign");
+    enter("C_Sign",&t);
     shim_dump_ulong_in("hSession", hSession);
     shim_dump_string_in("pData[ulDataLen]", pData, ulDataLen);
     rv = po->C_Sign(hSession, pData, ulDataLen, pSignature, pulSignatureLen);
     if (rv == CKR_OK)
 	shim_dump_string_out("pSignature[*pulSignatureLen]", pSignature, *pulSignatureLen);
 
-    return retne(rv);
+    return retne(rv,&t);
 }
 
 CK_RV
 shim_C_SignUpdate(CK_SESSION_HANDLE hSession, CK_BYTE_PTR pPart, CK_ULONG  ulPartLen)
 {
     CK_RV rv;
+    struct timeval t;
 
-    enter("C_SignUpdate");
+    enter("C_SignUpdate",&t);
     shim_dump_ulong_in("hSession", hSession);
     shim_dump_string_in("pPart[ulPartLen]", pPart, ulPartLen);
     rv = po->C_SignUpdate(hSession, pPart, ulPartLen);
-    return retne(rv);
+    return retne(rv,&t);
 }
 
 CK_RV
 shim_C_SignFinal(CK_SESSION_HANDLE hSession, CK_BYTE_PTR pSignature, CK_ULONG_PTR pulSignatureLen)
 {
     CK_RV rv;
+    struct timeval t;
 
-    enter("C_SignFinal");
+    enter("C_SignFinal",&t);
     shim_dump_ulong_in("hSession", hSession);
     rv = po->C_SignFinal(hSession, pSignature, pulSignatureLen);
     if (rv == CKR_OK)
 	shim_dump_string_out("pSignature[*pulSignatureLen]", pSignature, *pulSignatureLen);
 
-    return retne(rv);
+    return retne(rv,&t);
 }
 
 CK_RV
 shim_C_SignRecoverInit(CK_SESSION_HANDLE hSession, CK_MECHANISM_PTR pMechanism, CK_OBJECT_HANDLE hKey)
 {
     CK_RV rv;
+    struct timeval t;
 
-    enter("C_SignRecoverInit");
+    enter("C_SignRecoverInit",&t);
     shim_dump_ulong_in("hSession", hSession);
     deferred_fprintf(shim_config_output(), SPACER  "pMechanism->type=%s\n",
 	    lookup_enum(MEC_T, pMechanism->mechanism));
     shim_dump_ulong_in("hKey", hKey);
     rv = po->C_SignRecoverInit(hSession, pMechanism, hKey);
-    return retne(rv);
+    return retne(rv,&t);
 }
 
 CK_RV
@@ -981,22 +1045,24 @@ shim_C_SignRecover(CK_SESSION_HANDLE hSession, CK_BYTE_PTR pData, CK_ULONG  ulDa
 		   CK_BYTE_PTR pSignature, CK_ULONG_PTR pulSignatureLen)
 {
     CK_RV rv;
+    struct timeval t;
 
-    enter("C_SignRecover");
+    enter("C_SignRecover",&t);
     shim_dump_ulong_in("hSession", hSession);
     shim_dump_string_in("pData[ulDataLen]", pData, ulDataLen);
     rv = po->C_SignRecover(hSession, pData, ulDataLen, pSignature, pulSignatureLen);
     if (rv == CKR_OK)
 	shim_dump_string_out("pSignature[*pulSignatureLen]", pSignature, *pulSignatureLen);
-    return retne(rv);
+    return retne(rv,&t);
 }
 
 CK_RV
 shim_C_VerifyInit(CK_SESSION_HANDLE hSession, CK_MECHANISM_PTR pMechanism, CK_OBJECT_HANDLE hKey)
 {
     CK_RV rv;
+    struct timeval t;
 
-    enter("C_VerifyInit");
+    enter("C_VerifyInit",&t);
     shim_dump_ulong_in("hSession", hSession);
     deferred_fprintf(shim_config_output(), SPACER  "pMechanism->type=%s\n", lookup_enum(MEC_T, pMechanism->mechanism));
     shim_dump_string_in("pMechanism->pParameter[pMechanism->ulParameterLen]", pMechanism->pParameter, pMechanism->ulParameterLen);
@@ -1023,7 +1089,7 @@ shim_C_VerifyInit(CK_SESSION_HANDLE hSession, CK_MECHANISM_PTR pMechanism, CK_OB
     }
     shim_dump_ulong_in("hKey", hKey);
     rv = po->C_VerifyInit(hSession, pMechanism, hKey);
-    return retne(rv);
+    return retne(rv,&t);
 }
 
 CK_RV
@@ -1031,37 +1097,40 @@ shim_C_Verify(CK_SESSION_HANDLE hSession, CK_BYTE_PTR pData, CK_ULONG  ulDataLen
 	      CK_BYTE_PTR pSignature, CK_ULONG  ulSignatureLen)
 {
     CK_RV rv;
+    struct timeval t;
 
-    enter("C_Verify");
+    enter("C_Verify",&t);
     shim_dump_ulong_in("hSession", hSession);
     shim_dump_string_in("pData[ulDataLen]", pData, ulDataLen);
     shim_dump_string_in("pSignature[ulSignatureLen]", pSignature, ulSignatureLen);
     rv = po->C_Verify(hSession, pData, ulDataLen, pSignature, ulSignatureLen);
-    return retne(rv);
+    return retne(rv,&t);
 }
 
 CK_RV
 shim_C_VerifyUpdate(CK_SESSION_HANDLE hSession, CK_BYTE_PTR pPart, CK_ULONG  ulPartLen)
 {
     CK_RV rv;
+    struct timeval t;
 
-    enter("C_VerifyUpdate");
+    enter("C_VerifyUpdate",&t);
     shim_dump_ulong_in("hSession", hSession);
     shim_dump_string_in("pPart[ulPartLen]", pPart, ulPartLen);
     rv = po->C_VerifyUpdate(hSession, pPart, ulPartLen);
-    return retne(rv);
+    return retne(rv,&t);
 }
 
 CK_RV
 shim_C_VerifyFinal(CK_SESSION_HANDLE hSession, CK_BYTE_PTR pSignature, CK_ULONG  ulSignatureLen)
 {
     CK_RV rv;
+    struct timeval t;
 
-    enter("C_VerifyFinal");
+    enter("C_VerifyFinal",&t);
     shim_dump_ulong_in("hSession", hSession);
     shim_dump_string_in("pSignature[ulSignatureLen]", pSignature, ulSignatureLen);
     rv = po->C_VerifyFinal(hSession, pSignature, ulSignatureLen);
-    return retne(rv);
+    return retne(rv,&t);
 }
 
 
@@ -1070,13 +1139,14 @@ shim_C_VerifyRecoverInit(CK_SESSION_HANDLE hSession, CK_MECHANISM_PTR pMechanism
 			 CK_OBJECT_HANDLE hKey)
 {
     CK_RV rv;
+    struct timeval t;
 
-    enter("C_VerifyRecoverInit");
+    enter("C_VerifyRecoverInit",&t);
     shim_dump_ulong_in("hSession", hSession);
     deferred_fprintf(shim_config_output(), SPACER  "pMechanism->type=%s\n", lookup_enum(MEC_T, pMechanism->mechanism));
     shim_dump_ulong_in("hKey", hKey);
     rv = po->C_VerifyRecoverInit(hSession, pMechanism, hKey);
-    return retne(rv);
+    return retne(rv,&t);
 }
 
 CK_RV
@@ -1084,14 +1154,15 @@ shim_C_VerifyRecover(CK_SESSION_HANDLE hSession, CK_BYTE_PTR pSignature, CK_ULON
 		     CK_BYTE_PTR pData, CK_ULONG_PTR pulDataLen)
 {
     CK_RV rv;
+    struct timeval t;
 
-    enter("C_VerifyRecover");
+    enter("C_VerifyRecover",&t);
     shim_dump_ulong_in("hSession", hSession);
     shim_dump_string_in("pSignature[ulSignatureLen]", pSignature, ulSignatureLen);
     rv = po->C_VerifyRecover(hSession, pSignature, ulSignatureLen, pData, pulDataLen);
     if (rv == CKR_OK)
 	shim_dump_string_out("pData[*pulDataLen]", pData, *pulDataLen);
-    return retne(rv);
+    return retne(rv,&t);
 }
 
 CK_RV
@@ -1099,15 +1170,16 @@ shim_C_DigestEncryptUpdate(CK_SESSION_HANDLE hSession, CK_BYTE_PTR pPart, CK_ULO
 			   CK_BYTE_PTR pEncryptedPart, CK_ULONG_PTR pulEncryptedPartLen)
 {
     CK_RV rv;
+    struct timeval t;
 
-    enter("C_DigestEncryptUpdate");
+    enter("C_DigestEncryptUpdate",&t);
     shim_dump_ulong_in("hSession", hSession);
     shim_dump_string_in("pPart[ulPartLen]", pPart, ulPartLen);
     rv = po->C_DigestEncryptUpdate(hSession, pPart, ulPartLen, pEncryptedPart, pulEncryptedPartLen);
     if (rv == CKR_OK)
 	shim_dump_string_out("pEncryptedPart[*pulEncryptedPartLen]", pEncryptedPart, *pulEncryptedPartLen);
 
-    return retne(rv);
+    return retne(rv,&t);
 }
 
 CK_RV
@@ -1115,14 +1187,15 @@ shim_C_DecryptDigestUpdate(CK_SESSION_HANDLE hSession, CK_BYTE_PTR pEncryptedPar
 			   CK_BYTE_PTR pPart, CK_ULONG_PTR pulPartLen)
 {
     CK_RV rv;
+    struct timeval t;
 
-    enter("C_DecryptDigestUpdate");
+    enter("C_DecryptDigestUpdate",&t);
     shim_dump_ulong_in("hSession", hSession);
     shim_dump_string_in("pEncryptedPart[ulEncryptedPartLen]", pEncryptedPart, ulEncryptedPartLen);
     rv = po->C_DecryptDigestUpdate(hSession, pEncryptedPart, ulEncryptedPartLen, pPart, pulPartLen);
     if (rv == CKR_OK)
 	shim_dump_string_out("pPart[*pulPartLen]", pPart, *pulPartLen);
-    return retne(rv);
+    return retne(rv,&t);
 }
 
 CK_RV
@@ -1130,15 +1203,16 @@ shim_C_SignEncryptUpdate(CK_SESSION_HANDLE hSession, CK_BYTE_PTR pPart, CK_ULONG
 			 CK_BYTE_PTR pEncryptedPart, CK_ULONG_PTR pulEncryptedPartLen)
 {
     CK_RV rv;
+    struct timeval t;
 
-    enter("C_SignEncryptUpdate");
+    enter("C_SignEncryptUpdate",&t);
     shim_dump_ulong_in("hSession", hSession);
     shim_dump_string_in("pPart[ulPartLen]", pPart, ulPartLen);
     rv = po->C_SignEncryptUpdate(hSession, pPart, ulPartLen, pEncryptedPart, pulEncryptedPartLen);
     if (rv == CKR_OK)
 	shim_dump_string_out("pEncryptedPart[*pulEncryptedPartLen]", pEncryptedPart, *pulEncryptedPartLen);
 
-    return retne(rv);
+    return retne(rv,&t);
 }
 
 CK_RV
@@ -1146,15 +1220,16 @@ shim_C_DecryptVerifyUpdate(CK_SESSION_HANDLE hSession, CK_BYTE_PTR pEncryptedPar
 			   CK_BYTE_PTR pPart, CK_ULONG_PTR pulPartLen)
 {
     CK_RV rv;
+    struct timeval t;
 
-    enter("C_DecryptVerifyUpdate");
+    enter("C_DecryptVerifyUpdate",&t);
     shim_dump_ulong_in("hSession", hSession);
     shim_dump_string_in("pEncryptedPart[ulEncryptedPartLen]", pEncryptedPart, ulEncryptedPartLen);
     rv = po->C_DecryptVerifyUpdate(hSession, pEncryptedPart, ulEncryptedPartLen, pPart, pulPartLen);
     if (rv == CKR_OK)
 	shim_dump_string_out("pPart[*pulPartLen]", pPart, *pulPartLen);
 
-    return retne(rv);
+    return retne(rv,&t);
 }
 
 CK_RV
@@ -1163,8 +1238,9 @@ shim_C_GenerateKey(CK_SESSION_HANDLE hSession, CK_MECHANISM_PTR pMechanism,
 		   CK_OBJECT_HANDLE_PTR phKey)
 {
     CK_RV rv;
+    struct timeval t;
 
-    enter("C_GenerateKey");
+    enter("C_GenerateKey",&t);
     shim_dump_ulong_in("hSession", hSession);
     deferred_fprintf(shim_config_output(), SPACER  "pMechanism->type=%s\n", lookup_enum(MEC_T, pMechanism->mechanism));
     shim_attribute_list_in("pTemplate", pTemplate, ulCount);
@@ -1172,7 +1248,7 @@ shim_C_GenerateKey(CK_SESSION_HANDLE hSession, CK_MECHANISM_PTR pMechanism,
     if (rv == CKR_OK)
 	shim_dump_ulong_out("hKey", *phKey);
 
-    return retne(rv);
+    return retne(rv,&t);
 }
 
 CK_RV
@@ -1182,8 +1258,9 @@ shim_C_GenerateKeyPair(CK_SESSION_HANDLE hSession, CK_MECHANISM_PTR pMechanism,
 		       CK_OBJECT_HANDLE_PTR phPublicKey, CK_OBJECT_HANDLE_PTR phPrivateKey)
 {
     CK_RV rv;
+    struct timeval t;
 
-    enter("C_GenerateKeyPair");
+    enter("C_GenerateKeyPair",&t);
     shim_dump_ulong_in("hSession", hSession);
     deferred_fprintf(shim_config_output(), SPACER  "pMechanism->type=%s\n", lookup_enum(MEC_T, pMechanism->mechanism));
     shim_attribute_list_in("pPublicKeyTemplate", pPublicKeyTemplate, ulPublicKeyAttributeCount);
@@ -1196,7 +1273,7 @@ shim_C_GenerateKeyPair(CK_SESSION_HANDLE hSession, CK_MECHANISM_PTR pMechanism,
 	shim_dump_ulong_out("hPublicKey", *phPublicKey);
 	shim_dump_ulong_out("hPrivateKey", *phPrivateKey);
     }
-    return retne(rv);
+    return retne(rv,&t);
 }
 
 CK_RV
@@ -1205,8 +1282,9 @@ shim_C_WrapKey(CK_SESSION_HANDLE hSession, CK_MECHANISM_PTR pMechanism,
 	       CK_BYTE_PTR pWrappedKey, CK_ULONG_PTR pulWrappedKeyLen)
 {
     CK_RV rv;
+    struct timeval t;
 
-    enter("C_WrapKey");
+    enter("C_WrapKey",&t);
     shim_dump_ulong_in("hSession", hSession);
     deferred_fprintf(shim_config_output(), SPACER  "pMechanism->type=%s\n", lookup_enum(MEC_T, pMechanism->mechanism));
     shim_dump_ulong_in("hWrappingKey", hWrappingKey);
@@ -1215,7 +1293,7 @@ shim_C_WrapKey(CK_SESSION_HANDLE hSession, CK_MECHANISM_PTR pMechanism,
     if (rv == CKR_OK)
 	shim_dump_string_out("pWrappedKey[*pulWrappedKeyLen]", pWrappedKey, *pulWrappedKeyLen);
 
-    return retne(rv);
+    return retne(rv,&t);
 }
 
 CK_RV
@@ -1225,8 +1303,9 @@ shim_C_UnwrapKey(CK_SESSION_HANDLE hSession, CK_MECHANISM_PTR pMechanism,
 		 CK_OBJECT_HANDLE_PTR phKey)
 {
     CK_RV rv;
+    struct timeval t;
 
-    enter("C_UnwrapKey");
+    enter("C_UnwrapKey",&t);
     shim_dump_ulong_in("hSession", hSession);
     deferred_fprintf(shim_config_output(), SPACER  "pMechanism->type=%s\n", lookup_enum(MEC_T, pMechanism->mechanism));
     shim_dump_ulong_in("hUnwrappingKey", hUnwrappingKey);
@@ -1236,7 +1315,7 @@ shim_C_UnwrapKey(CK_SESSION_HANDLE hSession, CK_MECHANISM_PTR pMechanism,
 			 ulAttributeCount, phKey);
     if (rv == CKR_OK)
 	shim_dump_ulong_out("hKey", *phKey);
-    return retne(rv);
+    return retne(rv,&t);
 }
 
 CK_RV
@@ -1244,8 +1323,9 @@ shim_C_DeriveKey(CK_SESSION_HANDLE hSession, CK_MECHANISM_PTR pMechanism, CK_OBJ
 		 CK_ATTRIBUTE_PTR pTemplate, CK_ULONG  ulAttributeCount, CK_OBJECT_HANDLE_PTR phKey)
 {
     CK_RV rv;
+    struct timeval t;
 
-    enter("C_DeriveKey");
+    enter("C_DeriveKey",&t);
     shim_dump_ulong_in("hSession", hSession);
     deferred_fprintf(shim_config_output(), "[in ] pMechanism->type=%s\n",
 	    lookup_enum(MEC_T, pMechanism->mechanism));
@@ -1299,68 +1379,73 @@ shim_C_DeriveKey(CK_SESSION_HANDLE hSession, CK_MECHANISM_PTR pMechanism, CK_OBJ
     if (rv == CKR_OK)
 	shim_dump_ulong_out("hKey", *phKey);
 
-    return retne(rv);
+    return retne(rv,&t);
 }
 
 CK_RV
 shim_C_SeedRandom(CK_SESSION_HANDLE hSession, CK_BYTE_PTR pSeed, CK_ULONG  ulSeedLen)
 {
     CK_RV rv;
+    struct timeval t;
 
-    enter("C_SeedRandom");
+    enter("C_SeedRandom",&t);
     shim_dump_ulong_in("hSession", hSession);
     shim_dump_string_in("pSeed[ulSeedLen]", pSeed, ulSeedLen);
     rv = po->C_SeedRandom(hSession, pSeed, ulSeedLen);
-    return retne(rv);
+    return retne(rv,&t);
 }
 
 CK_RV
 shim_C_GenerateRandom(CK_SESSION_HANDLE hSession, CK_BYTE_PTR RandomData, CK_ULONG  ulRandomLen)
 {
     CK_RV rv;
+    struct timeval t;
 
-    enter("C_GenerateRandom");
+    enter("C_GenerateRandom",&t);
     shim_dump_ulong_in("hSession", hSession);
     rv = po->C_GenerateRandom(hSession, RandomData, ulRandomLen);
     if (rv == CKR_OK)
 	shim_dump_string_out("RandomData[ulRandomLen]", RandomData, ulRandomLen);
-    return retne(rv);
+    return retne(rv,&t);
 }
 
 CK_RV
 shim_C_GetFunctionStatus(CK_SESSION_HANDLE hSession)
 {
     CK_RV rv;
+    struct timeval t;
 
-    enter("C_GetFunctionStatus");
+    enter("C_GetFunctionStatus",&t);
     shim_dump_ulong_in("hSession", hSession);
     rv = po->C_GetFunctionStatus(hSession);
-    return retne(rv);
+    return retne(rv,&t);
 }
 
 CK_RV
 shim_C_CancelFunction(CK_SESSION_HANDLE hSession)
 {
     CK_RV rv;
+    struct timeval t;
 
-    enter("C_CancelFunction");
+    enter("C_CancelFunction",&t);
     shim_dump_ulong_in("hSession", hSession);
     rv = po->C_CancelFunction(hSession);
-    return retne(rv);
+    return retne(rv,&t);
 }
 
 CK_RV
 shim_C_WaitForSlotEvent(CK_FLAGS flags, CK_SLOT_ID_PTR pSlot, CK_VOID_PTR pRserved)
 {
     CK_RV rv;
+    struct timeval t;
 
-    enter("C_WaitForSlotEvent");
+    enter("C_WaitForSlotEvent",&t);
     shim_dump_ulong_in("flags", flags);
     if (pSlot != NULL) {
 	shim_dump_ulong_in("pSlot", *pSlot);
     }
     rv = po->C_WaitForSlotEvent(flags, pSlot, pRserved);
-    return retne(rv);
+    return retne(rv,&t);
 }
 
 /* Inits the shim. If successful, po != NULL */
@@ -1454,43 +1539,15 @@ static void init_shim(void)
 	return;
     }
 
-    fprintf(shim_config_output(), 
-	    "\n\n"
-	    "************************* PKCS#11 shim library *****************************\n"
-	    "* - version %s%*s*\n"  
-#if defined(HAVE_OPENSSL)
-	    "* - with OpenSSL support                                                   *\n"
-#else
-	    "* - without OpenSSL support                                                *\n"
-#endif
-	    "* The following env variables can be used to adjust the library behaviour: *\n"
-	    "* - PKCS11SHIM: contains the path of the library to intercept calls to     *\n"
-	    "* - PKCS11SHIM_OUTPUT: path to an output file where to write logs          *\n"
-	    "* - PKS11SHIM_CONSISTENCY: level of consistency for logs (0,1 or 2)        *\n"
-	    "****************************************************************************\n"
-	    "\n",
-	    VERSION, 63-strlen(VERSION), "");
-
-    switch(shim_config_consistency_level()) {
-    case per_callblock:		/* consistency per call accross threads, no deferred output */
+    shim_config_logfile_prolog(true); /* print a banner */
+    
+    if(shim_config_consistency_level()==per_callblock) {
 	use_print_mutex = true;
-	fprintf(shim_config_output(), "*** WARNING: logging is serialized and grouped per API call, it may affect performance ***\n");
-	break;
-	
-    case deferred:
-	fprintf(shim_config_output(), "*** WARNING: logging is deferred, log output is no more in sync with execution thread ***\n");
-	fprintf(shim_config_output(), "*** WARNING: this mode may lead to memory overflow                                    ***\n");
-	break;
-
-    case basic:
-    default:
-	fprintf(shim_config_output(), "*** WARNING: logging using basic mode, log entries may overlap for multithreaded applications ***\n");
-	
     }
     
     modhandle = C_LoadModule(shim_config_library(), &po);
     if (modhandle && po) {
-	fprintf(shim_config_output(), "Loaded: \"%s\"\n", shim_config_library());
+	fprintf(shim_config_output(), "library: \"%s\"\n", shim_config_library());
     }
     else {
 	po = NULL;
@@ -1499,4 +1556,19 @@ static void init_shim(void)
 	return;
     }
    
+}
+
+inline void shim_lock_print(void)
+{
+    if(use_print_mutex) pthread_mutex_lock(&print_mutex);
+}
+
+inline void shim_unlock_print(void)
+{
+    if(use_print_mutex) pthread_mutex_unlock(&print_mutex);
+}
+
+inline void shim_reset_counter(void)
+{
+    cnt=0;
 }

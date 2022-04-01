@@ -16,17 +16,9 @@
  * limitations under the License.
  */
 
-#if !defined(_DEFERRED_PRINTF_H_)
-#define _DEFERRED_PRINTF_H_
+#if !defined (_ATFORK_H_)
+#define _ATFORK_H_
 
-#include <threadqueue.h>
+void atfork_register_handlers();
 
-int deferred_fprintf(FILE *fp, const char * restrict fmt, ...);
-void deferred_flush(void);
-void deferred_atexit(void);
-void deferred_lock_queue(void);
-void deferred_unlock_queue(void);
-void deferred_wait_until_empty();
-void deferred_revive_thread(void);
-
-#endif	/* _DEFERRED_PRINTF_H_ */
+#endif /* _PKCS11_ATFORK_H_ */

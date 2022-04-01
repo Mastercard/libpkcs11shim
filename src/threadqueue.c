@@ -205,3 +205,13 @@ long thread_queue_length(struct threadqueue *queue)
     return counter;
 
 }
+
+inline void thread_queue_lock(struct threadqueue *queue)
+{
+    pthread_mutex_lock(&queue->mutex);
+}
+
+inline void thread_queue_unlock(struct threadqueue *queue)
+{
+    pthread_mutex_unlock(&queue->mutex);
+}
