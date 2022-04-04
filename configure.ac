@@ -60,9 +60,9 @@ LT_INIT			dnl libtool init
 
 # Do we want OpenSSL? OpenSSL is needed for certificate-related printing
 AC_ARG_ENABLE([openssl],
-  [AS_HELP_STRING([--disable-openssl], [Disable OpenSSL support @<:@default:check@:>@])],
+  [AS_HELP_STRING([--enable-openssl], [Enable OpenSSL support, for certificate printing @<:@default=no@:>@])],
   [:],
-  [enable_openssl=check])
+  [enable_openssl=no])
 
 # Checks for libraries.
 
