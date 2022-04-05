@@ -20,6 +20,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <sys/stat.h>
 #include "shim-config.h"
 #include "atfork.h"
 
@@ -38,25 +39,83 @@ static void shim_config_atexit_handler(void);
 static struct config_t config = { 0 };	/* initialize to all zeroes */
 
 
+/* check if a file is regular                     */
+/* i.e. it is not stderr, and the file descriptor */
+/* points to a regular file (using S_ISREG macro) */
+
+inline static bool is_file_regular(FILE *fp)
+{
+    bool rc = false;
+
+    if(fp!=stderr) {
+	struct stat sb;
+	if(fstat(fileno(fp),&sb)==0 && S_ISREG(sb.st_mode)) {
+	    rc = true;
+	}
+    }
+    return rc;
+}
+
+/* if forked, print a message to log */
+inline void shim_config_logfile_forked(bool forked)
+{
+    if(forked) {
+	fprintf(shim_config_output(), "[lib] process forked from %d to %d\n", getppid(), getpid());
+    }
+}
+
+
+/* if called from non-forked process, add end of file indicator */
+inline void shim_config_logfile_epilog(bool forked)
+{
+    if(!forked) {
+	fprintf(shim_config_output(), "[lib] *** EOF ***\n");
+    }
+}
+
+/* This API is called in two circumstances;
+ * - when the library starts
+ * - after a fork
+ * In the former case, we simply need to open the file.
+ * In the later case, we must also detect what the current file handler is:
+ * if it is pointing to a non-regular file,
+ */
 void shim_config_set_output(bool forked)
 {
-    /* close file handle if previously open */
-    if(config.output && config.output != stderr ) {
-	shim_config_logfile_epilog(forked);
-	free(config.logfilename);
-	fclose(config.output);
+    /* if we forked, log it */
+    shim_config_logfile_forked(forked);
+
+    if(forked) {
+	/* we must close file descriptors */
+	/* only when it points to a real file */
+	/* config.output is guaranteed to be initialized */
+	if(is_file_regular(config.output)) {
+	    shim_config_logfile_epilog(forked);
+	    fclose(config.output);
+	    config.output=stderr;
+	} else {
+	    /* fd points to a socket/symlink/device node */
+	    /* don't do anything, keep it like that       */
+	    return;
+	}
+    } else {
+	/* at library init. just proceed as for a clean initialization */
+	config.output=stderr;
     }
 
-    config.output = stderr;	/* set it by default */
-    config.logfilename = NULL;
+    /* in all the below, we are either from init of fork with a regular file */
+    if(config.logfilename) {
+	free(config.logfilename);
+	config.logfilename = NULL;
+    }
 
     char *output = getenv("PKCS11SHIM_OUTPUT");
     if(output) {
 	/* check if the PKCS11SHIM_OUTPUT contains %p */
-	
+
 	char *filename = NULL;
 	char *lookup=strdup(output);
-	
+
 	if(!lookup) {
 	    perror("Cannot duplicate string in memory");
 	    goto error;
@@ -66,28 +125,44 @@ void shim_config_set_output(bool forked)
 	/* if found */
 	if(index) {
 	    size_t filename_size = strlen(output)+16; /* a printed PID should never exceed 16 chars */
-	    filename=malloc(filename_size); 
+	    filename=malloc(filename_size);
 	    if(!filename) {
-		perror("Cannot allocate memory for generating filename");
+		perror("Cannot allocate memory, switching to stderr");
 		goto error;
 	    }
-	    
+
 	    *index=0;		/* terminate the string there */
 
 	    pid_t pid = getpid(); /* obtain PID */
 	    snprintf(filename, filename_size, "%s%d%s", lookup, pid, index+2);
 	} else {
-	    filename = strdup(lookup);
-	    if(!filename) {
-		perror("Cannot allocate memory for generating filename");
-		goto error;
+	    /* no index found */
+	    if(forked) {
+		/* we have forked, but no %p can be found in the name */
+		/* we simply suffix the filename with the pid         */
+
+		/* a printed PID should never exceed 16 chars , + 1 char for '.' */
+		size_t filename_size = strlen(output)+17;
+		filename=malloc(filename_size);
+		if(!filename) {
+		    perror("Cannot allocate memory, switching to stderr");
+		    goto error;
+		}
+		snprintf(filename, filename_size, "%s.%d", output, getpid());
+	    } else {
+		/* we haven't forked, use specified filename */
+		filename = strdup(lookup);
+		if(!filename) {
+		    perror("Cannot allocate memory, switching to stderr");
+		    goto error;
+		}
 	    }
 	}
 
     error:
 	if(lookup) free(lookup);
 
-	/* carryon: */
+	/* carry_on: */
 	/* this section takes care of opening the file */
 	if(filename) {
 	    config.output = fopen(filename, "a");
@@ -98,7 +173,7 @@ void shim_config_set_output(bool forked)
 		config.logfilename = strdup(filename); /* keep a copy of the filename */
 	    }
 	    free(filename);
-	}	
+	}
     }
 }
 
@@ -108,6 +183,7 @@ inline void shim_config_set_pids()
     config.pid = getpid();
     config.ppid = getppid();
 }
+
 
 bool init_shim_config()
 {
@@ -127,7 +203,7 @@ bool init_shim_config()
 
     /* set PID and PPID information */
     shim_config_set_pids();
-    
+
     char *consistency = getenv("PKCS11SHIM_CONSISTENCY");
     if(consistency) {
 	enum consistency_level_t consistency_level = atoi(consistency);
@@ -142,42 +218,48 @@ bool init_shim_config()
 	    fprintf(stderr,"*** WARNING: invalid consistency level specified: %u. Will use basic mode.\n", consistency_level);
 	}
     }
-    
+
     atfork_register_handlers();		/* register handlers to cope with threads after a fork */
     atexit(shim_config_atexit_handler); /* register exit handler */
     return true;
 }
 
 
-inline enum consistency_level_t shim_config_consistency_level() 
+inline enum consistency_level_t shim_config_consistency_level()
 {
     return config.consistency_level;
 }
+
 
 inline bool shim_is_printing_deferred()
 {
     return config.consistency_level == deferred;
 }
 
+
 inline FILE * shim_config_output()
 {
     return config.output ? config.output : stderr;
 }
+
 
 inline pid_t shim_config_pid()
 {
     return config.pid;
 }
 
+
 inline pid_t shim_config_ppid()
 {
     return config.ppid;
 }
 
+
 inline const char * shim_config_library()
 {
     return config.targetlib;
-}   
+}
+
 
 static void shim_config_atexit_handler(void)
 {
@@ -197,13 +279,12 @@ static void shim_config_atexit_handler(void)
 }
 
 
-
 void shim_config_logfile_prolog(bool firsttime)
 {
-    fprintf(shim_config_output(), 
+    fprintf(shim_config_output(),
 	    "\n\n"
 	    "************************* PKCS#11 shim library *****************************\n"
-	    "* - version %s%*s*\n"  
+	    "* - version %s%*s*\n"
 #if defined(HAVE_OPENSSL)
 	    "* - with OpenSSL support                                                   *\n"
 #else
@@ -230,7 +311,7 @@ void shim_config_logfile_prolog(bool firsttime)
 	fprintf(shim_config_output(), "PKCS11SHIM_CONSISTENCY=1\n");
 	fprintf(shim_config_output(), "*** WARNING: logging is serialized and grouped per API call, it may affect performance ***\n");
 	break;
-	
+
     case deferred:
 	fprintf(shim_config_output(), "PKCS11SHIM_CONSISTENCY=2\n");
 	fprintf(shim_config_output(), "*** WARNING: logging is deferred, log output is no more in sync with execution thread ***\n");
@@ -241,18 +322,8 @@ void shim_config_logfile_prolog(bool firsttime)
     default:
 	fprintf(shim_config_output(), "PKCS11SHIM_CONSISTENCY=0\n");
 	fprintf(shim_config_output(), "*** WARNING: logging using basic mode, log entries may overlap for multithreaded applications ***\n");
-	
+
     }
 
     fflush(shim_config_output());
-}
-
-
-inline void shim_config_logfile_epilog(bool forked)
-{
-    if(forked==true) {
-	fprintf(shim_config_output(), "Process forked from %d to %d\n", getppid(), getpid());
-    } else {
-	fprintf(shim_config_output(), "*** EOF ***\n");
-    }
 }
