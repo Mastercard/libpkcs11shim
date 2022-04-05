@@ -24,6 +24,9 @@
 #include <stdarg.h>
 #include <pthread.h>
 #include <unistd.h>
+#ifdef __linux__
+#include <sched.h>
+#endif
 #include "threadqueue.h"
 #include "shim-config.h"
 #include "deferred-printf.h"
@@ -238,7 +241,11 @@ inline void deferred_unlock_queue(void)
 inline void deferred_wait_until_empty()
 {
     while(thread_queue_length(&deferred_log_queue)>0) {
+#ifdef __linux__
+	sched_yield();
+#else
 	pthread_yield();
+#endif
     }
 }
 

@@ -26,7 +26,17 @@
 #include <sys/time.h>
 #include <time.h>
 #include <pthread.h>
+
+#if defined(__linux__)
+/* https://stackoverflow.com/a/36025103/979318 */
+#include <sys/syscall.h>
+#define gettid() syscall(SYS_gettid)
+#endif
+
+#if defined(__FreeBSD__) || defined(__AIX__)
 #include <pthread_np.h>
+#endif
+
 #include <stdbool.h>
 #include <stdatomic.h>
 #include <stdint.h>
@@ -106,7 +116,15 @@ static void enter(const char *function, struct timeval *tv)
     deferred_fprintf(shim_config_output(), CNTSTRING, cnt, function);
     deferred_fprintf(shim_config_output(), "[pid] %ld\n", shim_config_pid());
     deferred_fprintf(shim_config_output(), "[ppd] %ld\n", shim_config_ppid());
-    deferred_fprintf(shim_config_output(), "[tid] %ld\n", pthread_getthreadid_np());
+    deferred_fprintf(shim_config_output(), "[tid] %ld\n", 
+#if defined(__linux__)
+		     gettid()
+#elif defined(__FreeBSD__) || defined(__AIX__)
+		     pthread_getthreadid_np()
+#else
+#error Platform not supported, please adapt source code.
+#endif
+		     );
     deferred_fprintf(shim_config_output(), "[tic] %s.%06ld\n", time_string, (long)tv->tv_usec);
     /* we are just incrementing a counter, the relaxed memory model can be safely used */
     atomic_fetch_add_explicit(&cnt, 1, memory_order_relaxed);
