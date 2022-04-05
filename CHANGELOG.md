@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.0] - 2022-04-05
+### Added
+- the library supports now forking. Log files are reopen and thread maintained over forks.
+- the default build is now with OpenSSL disabled.
+
+### Changed
+- clearer layout in log files.
+
 ## [1.4.0] - 2022-03-21
 ### Added
 - when specifying `PKCS11SHIM_OUTPUT`, any occurence of `%p` will be replaced by the PID
