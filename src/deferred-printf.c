@@ -24,7 +24,7 @@
 #include <stdarg.h>
 #include <pthread.h>
 #include <unistd.h>
-#ifdef __linux__
+#if defined(__linux__) || defined(__APPLE__)
 #include <sched.h>
 #endif
 #include "threadqueue.h"
@@ -99,7 +99,7 @@ static void * queue_processor(void *_ignore)
 
 	case ping:
 	    break;
-	       
+
 	case end_thread:
 	default:
 	    carry_on = false;
@@ -115,7 +115,7 @@ static void deferred_init_once(void)
 	deferred_enabled = true;
 	pthread_key_create(&deferred_log_key, deferred_destructor);
 	deferred_init_once_rv = thread_queue_init(&deferred_log_queue); /* create the queue */
-    
+
 	if(deferred_init_once_rv==0) {
 	    pthread_create(&queue_processor_thread, NULL, queue_processor, NULL); /* create the worker thread */
 	    atexit(deferred_atexit_handler);
@@ -129,7 +129,7 @@ static void deferred_init_once(void)
 int deferred_fprintf(FILE *fp, const char * restrict fmt, ...)
 {
     int rc = -1;
-    
+
     pthread_once(&deferred_log_once, deferred_init_once); /* initialize key */
     if (deferred_init_once_rv != 0) {
 	fprintf(stderr, "***ERROR could not initialize deferred print subsystem, using same thread logging facility ***\n");
@@ -158,7 +158,7 @@ int deferred_fprintf(FILE *fp, const char * restrict fmt, ...)
 	link = calloc(1,sizeof(struct link_t));
 	if(link==NULL) goto cleanup;
 
-	struct chain_t *chain; 
+	struct chain_t *chain;
 	if((chain=pthread_getspecific(deferred_log_key))==NULL) { /* create the structure */
 	    chain = calloc(1, sizeof(struct chain_t));
 	    if(chain==NULL) goto cleanup;
@@ -186,7 +186,7 @@ int deferred_fprintf(FILE *fp, const char * restrict fmt, ...)
     } else {
 	/* PKCS11SHIM_SYNCHRONOUS requested, we print directly */
 	va_start (args, fmt);
-	n = vfprintf(fp,fmt,args); 
+	n = vfprintf(fp,fmt,args);
 	va_end (args);
     }
     return rc;
@@ -195,7 +195,7 @@ int deferred_fprintf(FILE *fp, const char * restrict fmt, ...)
 
 inline void deferred_flush(void)
 {
-    struct chain_t *chain; 
+    struct chain_t *chain;
 
     if (deferred_init_once_rv==0 && deferred_enabled==true) {
 
@@ -241,10 +241,12 @@ inline void deferred_unlock_queue(void)
 inline void deferred_wait_until_empty()
 {
     while(thread_queue_length(&deferred_log_queue)>0) {
-#ifdef __linux__
+#if defined(__linux__) || defined(__APPLE__)
 	sched_yield();
-#else
+#elif defined(__FreeBSD__) || defined(__AIX__)
 	pthread_yield();
+#else
+#error unsupported platform, please adapt source code and recompile.
 #endif
     }
 }

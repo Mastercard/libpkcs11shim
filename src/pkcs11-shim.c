@@ -28,7 +28,9 @@
 #include <pthread.h>
 
 #if defined(__linux__)
-/* https://stackoverflow.com/a/36025103/979318 */
+/* bug in glibc: gettid() is not advertised
+   https://stackoverflow.com/a/36025103/979318
+*/
 #include <sys/syscall.h>
 #define gettid() syscall(SYS_gettid)
 #endif
@@ -116,13 +118,13 @@ static void enter(const char *function, struct timeval *tv)
     deferred_fprintf(shim_config_output(), CNTSTRING, cnt, function);
     deferred_fprintf(shim_config_output(), "[pid] %ld\n", shim_config_pid());
     deferred_fprintf(shim_config_output(), "[ppd] %ld\n", shim_config_ppid());
-    deferred_fprintf(shim_config_output(), "[tid] %ld\n", 
+    deferred_fprintf(shim_config_output(), "[tid] %ld\n",
 #if defined(__linux__)
 		     gettid()
 #elif defined(__FreeBSD__) || defined(__AIX__)
 		     pthread_getthreadid_np()
 #else
-#error Platform not supported, please adapt source code.
+		     pthread_self()
 #endif
 		     );
     deferred_fprintf(shim_config_output(), "[tic] %s.%06ld\n", time_string, (long)tv->tv_usec);
@@ -143,7 +145,7 @@ static CK_RV retne(CK_RV rv, struct timeval *prev_tv)
     strftime (time_string, sizeof(time_string), "%F %H:%M:%S", tm);
     deferred_fprintf(shim_config_output(), "[toc] %s.%06ld\n", time_string, (long)tv.tv_usec);
     timeval_substract(&elapsed, prev_tv, &tv);
-    deferred_fprintf(shim_config_output(), "[lap] %ld.%06ld\n", (long)elapsed.tv_sec, (long)elapsed.tv_usec);    
+    deferred_fprintf(shim_config_output(), "[lap] %ld.%06ld\n", (long)elapsed.tv_sec, (long)elapsed.tv_usec);
     deferred_fprintf(shim_config_output(), "[ret] %ld %s\n", (unsigned long) rv, lookup_enum ( RV_T, rv ));
     deferred_flush();
     if(use_print_mutex) pthread_mutex_unlock(&print_mutex);
