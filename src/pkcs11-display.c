@@ -93,11 +93,17 @@ buf_spec(CK_VOID_PTR buf_addr, CK_ULONG buf_len)
 {
     static char ret[64];
 
-    if (sizeof(CK_VOID_PTR) == 4)
-	sprintf(ret, "%08lx / %lu", (unsigned long) buf_addr, buf_len);
-    else
-	sprintf(ret, "%016llx / %lu", (unsigned long long) buf_addr, buf_len);
-	
+    if((CK_LONG)buf_len==CK_UNAVAILABLE_INFORMATION) {
+	if (sizeof(CK_VOID_PTR) == 4)
+	    sprintf(ret, "%08lx / -1 (CK_UNAVAILABLE_INFORMATION)", (unsigned long) buf_addr);
+	else
+	    sprintf(ret, "%016llx / -1 (CK_UNAVALABLE_INFORMATION)", (unsigned long long) buf_addr);
+    } else {
+	if (sizeof(CK_VOID_PTR) == 4)
+	    sprintf(ret, "%08lx / %lu", (unsigned long) buf_addr, buf_len);
+	else
+	    sprintf(ret, "%016llx / %lu", (unsigned long long) buf_addr, buf_len);
+    }
     return ret;
 }
 
@@ -941,7 +947,7 @@ print_mech_list(FILE *f, CK_MECHANISM_TYPE_PTR pMechanismList, CK_ULONG ulMechCo
 	for (imech = 0; imech < ulMechCount; imech++) {
 	    const char *name = lookup_enum(MEC_T, pMechanismList[imech]);
 	    if (name)
-		deferred_fprintf(f, "      %30s \n", name);
+		deferred_fprintf(f, "      %s \n", name);
 	    else
 		deferred_fprintf(f, "      Unknown Mechanism (%08lx)  \n", pMechanismList[imech]);
 	}

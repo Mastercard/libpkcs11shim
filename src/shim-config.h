@@ -70,7 +70,6 @@ pid_t shim_config_pid();
 pid_t shim_config_ppid();
 const char * shim_config_library();
 void shim_config_logfile_prolog(bool firsttime);
-void shim_config_logfile_epilog(bool forked);
 
 
 #endif /* _SHIM_CONFIG_H_ */

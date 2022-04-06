@@ -57,7 +57,7 @@ inline static bool is_file_regular(FILE *fp)
 }
 
 /* if forked, print a message to log */
-inline void shim_config_logfile_forked(bool forked)
+inline static void shim_config_logfile_forked(bool forked)
 {
     if(forked) {
 	fprintf(shim_config_output(), "[lib] process forked from %d to %d\n", getppid(), getpid());
@@ -66,7 +66,7 @@ inline void shim_config_logfile_forked(bool forked)
 
 
 /* if called from non-forked process, add end of file indicator */
-inline void shim_config_logfile_epilog(bool forked)
+inline static void shim_config_logfile_epilog(bool forked)
 {
     if(!forked) {
 	fprintf(shim_config_output(), "[lib] *** EOF ***\n");
