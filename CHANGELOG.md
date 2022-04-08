@@ -7,7 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.6.0] - 2022-04-08
 ### Added
-- new environment variable `PKCS11SHIM_REVEALPIN`, to explicitely set for revealing PINs or passphrases on `C_Login()` calls.
+- support for hiding PIN/passphrase information. Enabled by default, can be switched off with `PKCS11SHIM_REVEALPIN` env variable.
+
+### Changed
 - print `CK_UNAVAILABLE_INFORMATION` when ulValueLen equals to -1
 
 ### Fixed
