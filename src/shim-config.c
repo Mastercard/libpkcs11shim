@@ -32,6 +32,7 @@ struct config_t {
     enum consistency_level_t consistency_level;
     pid_t pid;
     pid_t ppid;
+    bool revealpin;
 };
 
 static void shim_config_atexit_handler(void);
@@ -184,6 +185,20 @@ inline void shim_config_set_pids()
     config.ppid = getppid();
 }
 
+static void shim_config_set_pin_visibility()
+{
+    char *revealpin = getenv("PKCS11SHIM_REVEALPIN");
+    if(revealpin && (
+	   ( strcasecmp(revealpin,"1")==0 ) ||
+	   ( strcasecmp(revealpin,"yes")==0 ) ||
+	   ( strcasecmp(revealpin,"on")==0 ) ||
+	   ( strcasecmp(revealpin,"true")==0 ))) {
+	config.revealpin = true;
+    } else {
+	config.revealpin = false;
+    }
+}
+ 
 
 bool init_shim_config()
 {
@@ -204,6 +219,10 @@ bool init_shim_config()
     /* set PID and PPID information */
     shim_config_set_pids();
 
+    /* set PIN visibility */
+    shim_config_set_pin_visibility();
+
+    /* set log output consistency level */
     char *consistency = getenv("PKCS11SHIM_CONSISTENCY");
     if(consistency) {
 	enum consistency_level_t consistency_level = atoi(consistency);
@@ -258,6 +277,12 @@ inline pid_t shim_config_ppid()
 inline const char * shim_config_library()
 {
     return config.targetlib;
+}
+
+
+inline bool shim_config_canrevealpin()
+{
+    return config.revealpin;
 }
 
 
@@ -325,5 +350,9 @@ void shim_config_logfile_prolog(bool firsttime)
 
     }
 
+    if(shim_config_canrevealpin()) {
+	fprintf(shim_config_output(), "*** WARNING: PIN reveal mode enabled, log file will show C_Login() PIN or passphrase ***\n");
+    }
+	
     fflush(shim_config_output());
 }

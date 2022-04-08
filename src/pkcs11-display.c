@@ -21,6 +21,7 @@
 
 #include "config.h"
 #include <string.h>
+#include <stdbool.h>
 
 #if defined(HAVE_OPENSSL)
 #include <openssl/x509.h>
@@ -88,8 +89,7 @@
 #define CKA_CERT_MD5_HASH		        (CKA_TRUST + 101)
 
 
-static char *
-buf_spec(CK_VOID_PTR buf_addr, CK_ULONG buf_len)
+static char *buf_spec(CK_VOID_PTR buf_addr, CK_ULONG buf_len)
 {
     static char ret[64];
 
@@ -108,8 +108,7 @@ buf_spec(CK_VOID_PTR buf_addr, CK_ULONG buf_len)
 }
 
 
-void
-print_enum(FILE *f, CK_LONG type, CK_VOID_PTR value, CK_ULONG size, CK_VOID_PTR arg)
+void print_enum(FILE *f, CK_LONG type, CK_VOID_PTR value, CK_ULONG size, CK_VOID_PTR arg)
 {
     enum_spec *spec = (enum_spec*)arg;
     CK_ULONG i;
@@ -125,16 +124,14 @@ print_enum(FILE *f, CK_LONG type, CK_VOID_PTR value, CK_ULONG size, CK_VOID_PTR 
 }
 
 
-void
-print_boolean(FILE *f, CK_LONG type, CK_VOID_PTR value, CK_ULONG size, CK_VOID_PTR arg)
+void print_boolean(FILE *f, CK_LONG type, CK_VOID_PTR value, CK_ULONG size, CK_VOID_PTR arg)
 {
     CK_BYTE i = *((CK_BYTE *)value);
     deferred_fprintf(f, i ? "True\n" : "False\n");
 }
 
 
-void
-print_generic(FILE *f, CK_LONG type, CK_VOID_PTR value, CK_ULONG size, CK_VOID_PTR arg)
+static void _print_generic(FILE *f, CK_LONG type, CK_VOID_PTR value, CK_ULONG size, CK_VOID_PTR arg, bool reveal)
 {
     CK_ULONG i;
 
@@ -159,13 +156,22 @@ print_generic(FILE *f, CK_LONG type, CK_VOID_PTR value, CK_ULONG size, CK_VOID_P
 
 	    val = ((CK_BYTE *)value)[i];
 	    /* hex */
-	    sprintf(hex_ptr, "%02X ", val);
+	    if(reveal) {
+		sprintf(hex_ptr, "%02X ", val);
+	    } else {
+		sprintf(hex_ptr, "** ");
+	    }
 	    hex_ptr += 3;
-	    /* ascii */
-	    if (val > 31 && val < 128)
-		*ascii_ptr = val;
-	    else
-		*ascii_ptr = '.';
+
+            /* ascii */
+	    if(reveal) {
+		if (val > 31 && val < 128)
+		    *ascii_ptr = val;
+		else
+		    *ascii_ptr = '.';
+	    } else {
+		*ascii_ptr = '*';
+	    }
 	    ascii_ptr++;
 	}
 
@@ -183,8 +189,18 @@ print_generic(FILE *f, CK_LONG type, CK_VOID_PTR value, CK_ULONG size, CK_VOID_P
     deferred_fprintf(f, "\n");
 }
 
-static void
-print_dn(FILE *f, CK_LONG type, CK_VOID_PTR value, CK_ULONG size, CK_VOID_PTR arg)
+inline void print_generic(FILE *f, CK_LONG type, CK_VOID_PTR value, CK_ULONG size, CK_VOID_PTR arg)
+{
+    _print_generic(f,type,value,size,arg,true);
+}
+
+inline void print_sensitive(FILE *f, CK_LONG type, CK_VOID_PTR value, CK_ULONG size, CK_VOID_PTR arg)
+{
+    _print_generic(f,type,value,size,arg,false);
+}
+
+
+static void print_dn(FILE *f, CK_LONG type, CK_VOID_PTR value, CK_ULONG size, CK_VOID_PTR arg)
 {
     print_generic(f, type, value, size, arg);
 #if defined(HAVE_OPENSSL)

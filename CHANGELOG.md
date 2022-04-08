@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.0] - 2022-04-08
+### Added
+- new environment variable `PKCS11SHIM_REVEALPIN`, to explicitely set for revealing PINs or passphrases on `C_Login()` calls.
+- print `CK_UNAVAILABLE_INFORMATION` when ulValueLen equals to -1
+
+### Fixed
+- compilation under MacOS
+
 ## [1.5.0] - 2022-04-05
 ### Added
 - the library supports now forking. Log files are reopen and thread maintained over forks.

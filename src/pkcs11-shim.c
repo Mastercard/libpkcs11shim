@@ -153,73 +153,84 @@ static CK_RV retne(CK_RV rv, struct timeval *prev_tv)
 }
 
 
-static void
-shim_dump_string_in(const char *name, CK_VOID_PTR data, CK_ULONG size)
+static void shim_dump_string_in(const char *name, CK_VOID_PTR data, CK_ULONG size)
 {
     deferred_fprintf(shim_config_output(), "[in ] %s ", name);
     print_generic(shim_config_output(), 0, data, size, NULL);
 }
 
-static void
-shim_dump_string_out(const char *name, CK_VOID_PTR data, CK_ULONG size)
+
+static void shim_dump_sensitive_in(const char *name, CK_VOID_PTR data, CK_ULONG size)
+{
+    deferred_fprintf(shim_config_output(), "[in ] %s ", name);
+    if(shim_config_canrevealpin()) {
+	print_generic(shim_config_output(), 0, data, size, NULL);
+    } else {
+	print_sensitive(shim_config_output(), 0, data, size, NULL);
+    }	
+}
+
+
+static void shim_dump_string_out(const char *name, CK_VOID_PTR data, CK_ULONG size)
 {
     deferred_fprintf(shim_config_output(), "[out] %s ", name);
     print_generic(shim_config_output(), 0, data, size, NULL);
 }
 
-static void
-shim_dump_ulong_in(const char *name, CK_ULONG value)
+
+static void shim_dump_ulong_in(const char *name, CK_ULONG value)
 {
     deferred_fprintf(shim_config_output(), "[in ] %s = 0x%lx\n", name, value);
 }
 
-static void
-shim_dump_ulong_out(const char *name, CK_ULONG value)
+
+static void shim_dump_ulong_out(const char *name, CK_ULONG value)
 {
     deferred_fprintf(shim_config_output(), "[out] %s = 0x%lx\n", name, value);
 }
 
-static void
-shim_dump_desc_out(const char *name)
+
+static void shim_dump_desc_out(const char *name)
 {
     deferred_fprintf(shim_config_output(), "[out] %s: \n", name);
 }
 
-static void
-shim_dump_array_out(const char *name, CK_ULONG size)
+
+static void shim_dump_array_out(const char *name, CK_ULONG size)
 {
     deferred_fprintf(shim_config_output(), "[out] %s[%ld]: \n", name, size);
 }
 
-static void
-shim_attribute_req_in(const char *name, CK_ATTRIBUTE_PTR pTemplate,
+
+static void shim_attribute_req_in(const char *name, CK_ATTRIBUTE_PTR pTemplate,
 		      CK_ULONG  ulCount)
 {
     deferred_fprintf(shim_config_output(), "[in ] %s[%ld]: \n", name, ulCount);
     print_attribute_list_req(shim_config_output(), pTemplate, ulCount);
 }
 
-static void
-shim_attribute_list_in(const char *name, CK_ATTRIBUTE_PTR pTemplate,
+
+static void shim_attribute_list_in(const char *name, CK_ATTRIBUTE_PTR pTemplate,
 		       CK_ULONG  ulCount)
 {
     deferred_fprintf(shim_config_output(), "[in ] %s[%ld]: \n", name, ulCount);
     print_attribute_list(shim_config_output(), pTemplate, ulCount);
 }
 
-static void
-shim_attribute_list_out(const char *name, CK_ATTRIBUTE_PTR pTemplate,
+
+static void shim_attribute_list_out(const char *name, CK_ATTRIBUTE_PTR pTemplate,
 			CK_ULONG  ulCount)
 {
     deferred_fprintf(shim_config_output(), "[out] %s[%ld]: \n", name, ulCount);
     print_attribute_list(shim_config_output(), pTemplate, ulCount);
 }
 
-static void
-print_ptr_in(const char *name, CK_VOID_PTR ptr)
+
+static void print_ptr_in(const char *name, CK_VOID_PTR ptr)
 {
     deferred_fprintf(shim_config_output(), "[in ] %s = %p\n", name, ptr);
 }
+
 
 CK_RV C_GetFunctionList
 (CK_FUNCTION_LIST_PTR_PTR ppFunctionList)
@@ -528,7 +539,7 @@ shim_C_Login(CK_SESSION_HANDLE hSession, CK_USER_TYPE userType,
     shim_dump_ulong_in("hSession", hSession);
     deferred_fprintf(shim_config_output(), "[in ] userType = %s\n",
 	    lookup_enum(USR_T, userType));
-    shim_dump_string_in("pPin[ulPinLen]", pPin, ulPinLen);
+    shim_dump_sensitive_in("pPin[ulPinLen]", pPin, ulPinLen);
     rv = po->C_Login(hSession, userType, pPin, ulPinLen);
     return retne(rv,&t);
 }

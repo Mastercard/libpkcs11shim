@@ -65,11 +65,12 @@ enum ck_type{
 
 const char *lookup_enum_spec(enum_spec *spec, CK_ULONG value);
 const char *lookup_enum(CK_ULONG type, CK_ULONG value);
-void print_enum    (FILE *f, CK_LONG type, CK_VOID_PTR value, CK_ULONG size, CK_VOID_PTR arg);
-void print_boolean (FILE *f, CK_LONG type, CK_VOID_PTR value, CK_ULONG size, CK_VOID_PTR arg);
-void print_generic (FILE *f, CK_LONG type, CK_VOID_PTR value, CK_ULONG size, CK_VOID_PTR arg);
-void print_print   (FILE *f, CK_LONG type, CK_VOID_PTR value, CK_ULONG size, CK_VOID_PTR arg);
-void show_error    (FILE *f, char *str, CK_RV rc);
+void print_enum     (FILE *f, CK_LONG type, CK_VOID_PTR value, CK_ULONG size, CK_VOID_PTR arg);
+void print_boolean  (FILE *f, CK_LONG type, CK_VOID_PTR value, CK_ULONG size, CK_VOID_PTR arg);
+void print_generic  (FILE *f, CK_LONG type, CK_VOID_PTR value, CK_ULONG size, CK_VOID_PTR arg);
+void print_sensitive(FILE *f, CK_LONG type, CK_VOID_PTR value, CK_ULONG size, CK_VOID_PTR arg);
+void print_print    (FILE *f, CK_LONG type, CK_VOID_PTR value, CK_ULONG size, CK_VOID_PTR arg);
+void show_error     (FILE *f, char *str, CK_RV rc);
 
 void print_ck_info(FILE *f, CK_INFO *info);
 void print_slot_list(FILE *f, CK_SLOT_ID_PTR pSlotList, CK_ULONG ulCount);

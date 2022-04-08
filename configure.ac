@@ -18,12 +18,12 @@ AC_SUBST([$1], ['$2'])
 ])
 
 define(VERSION_MAJOR,1)
-define(VERSION_MINOR,5)
+define(VERSION_MINOR,6)
 define(VERSION_FIX,0)
 
 # Following http://web.mit.edu/gnu/doc/html/libtool.html#SEC36
 define(ABI_CUR,0)
-define(ABI_REV,5)
+define(ABI_REV,6)
 define(ABI_AGE,0)
 
 
