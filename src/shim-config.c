@@ -351,7 +351,7 @@ void shim_config_logfile_prolog(bool firsttime)
     }
 
     if(shim_config_canrevealpin()) {
-	fprintf(shim_config_output(), "*** WARNING: PIN reveal mode enabled, log file will show C_Login() PIN or passphrase ***\n");
+	fprintf(shim_config_output(), "*** WARNING: PIN reveal mode enabled, log file may contain PINs or passphrases        ***\n");
     }
 	
     fflush(shim_config_output());

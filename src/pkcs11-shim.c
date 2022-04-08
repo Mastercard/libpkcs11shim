@@ -405,7 +405,7 @@ shim_C_InitToken (CK_SLOT_ID slotID, CK_UTF8CHAR_PTR pPin, CK_ULONG ulPinLen,
 
     enter("C_InitToken",&t);
     shim_dump_ulong_in("slotID", slotID);
-    shim_dump_string_in("pPin[ulPinLen]", pPin, ulPinLen);
+    shim_dump_sensitive_in("pPin[ulPinLen]", pPin, ulPinLen);
     shim_dump_string_in("pLabel[32]", pLabel, 32);
     rv = po->C_InitToken (slotID, pPin, ulPinLen, pLabel);
     return retne(rv,&t);
@@ -419,7 +419,7 @@ shim_C_InitPIN(CK_SESSION_HANDLE hSession, CK_UTF8CHAR_PTR pPin, CK_ULONG  ulPin
 
     enter("C_InitPIN", &t);
     shim_dump_ulong_in("hSession", hSession);
-    shim_dump_string_in("pPin[ulPinLen]", pPin, ulPinLen);
+    shim_dump_sensitive_in("pPin[ulPinLen]", pPin, ulPinLen);
     rv = po->C_InitPIN(hSession, pPin, ulPinLen);
     return retne(rv,&t);
 }
@@ -433,8 +433,8 @@ shim_C_SetPIN(CK_SESSION_HANDLE hSession, CK_UTF8CHAR_PTR pOldPin, CK_ULONG  ulO
 
     enter("C_SetPIN", &t);
     shim_dump_ulong_in("hSession", hSession);
-    shim_dump_string_in("pOldPin[ulOldLen]", pOldPin, ulOldLen);
-    shim_dump_string_in("pNewPin[ulNewLen]", pNewPin, ulNewLen);
+    shim_dump_sensitive_in("pOldPin[ulOldLen]", pOldPin, ulOldLen);
+    shim_dump_sensitive_in("pNewPin[ulNewLen]", pNewPin, ulNewLen);
     rv = po->C_SetPIN(hSession, pOldPin, ulOldLen, pNewPin, ulNewLen);
     return retne(rv,&t);
 }
