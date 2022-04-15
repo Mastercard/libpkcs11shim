@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdbool.h>
 #include <errno.h>
 #include <pthread.h>
 #include <sys/time.h>
@@ -162,7 +163,7 @@ int thread_queue_get(struct threadqueue *queue, const struct timespec *timeout, 
 }
 
 //maybe caller should supply a callback for cleaning the elements ?
-int thread_queue_cleanup(struct threadqueue *queue, int freedata)
+int thread_queue_cleanup(struct threadqueue *queue, int freedata, bool afterfork)
 {
     struct msglist *rec;
     struct msglist *next;
@@ -172,7 +173,10 @@ int thread_queue_cleanup(struct threadqueue *queue, int freedata)
         return EINVAL;
     }
 
-    pthread_mutex_lock(&queue->mutex);
+    if(!afterfork) {
+	/* if we are after a fork, the lock is invalid, we will recreate it */
+	pthread_mutex_lock(&queue->mutex);
+    }
     recs[0] = queue->first;
     recs[1] = queue->msgpool;
     for(i = 0; i < 2 ; i++) {
@@ -187,7 +191,10 @@ int thread_queue_cleanup(struct threadqueue *queue, int freedata)
         }
     }
 
-    pthread_mutex_unlock(&queue->mutex);
+    if(!afterfork) {
+	pthread_mutex_unlock(&queue->mutex);
+    }
+
     ret = pthread_mutex_destroy(&queue->mutex);
     pthread_cond_destroy(&queue->cond);
 

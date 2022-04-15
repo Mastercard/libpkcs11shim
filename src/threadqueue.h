@@ -2,6 +2,7 @@
 #define _THREADQUEUE_H_ 1
 
 #include <pthread.h>
+#include <stdbool.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -178,10 +179,11 @@ long thread_queue_length( struct threadqueue *queue );
  *
  * @param queue Pointer to the queue that should be cleaned
  * @param freedata set to nonzero if free(3) should be called on remaining
+ * @param afterfork, set to true if invoked right after a fork (e.g. from pthread_atfork() handler)
  * messages
  * @return 0 on success EINVAL if queue is NULL EBUSY if someone is holding any locks on the queue
  */
-int thread_queue_cleanup(struct threadqueue *queue, int freedata);
+int thread_queue_cleanup(struct threadqueue *queue, int freedata, bool afterfork);
 
 void thread_queue_lock(struct threadqueue *queue);
 void thread_queue_unlock(struct threadqueue *queue);

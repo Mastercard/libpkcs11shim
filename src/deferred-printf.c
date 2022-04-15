@@ -258,7 +258,7 @@ void deferred_revive_thread(void)
     if(deferred_init_once_rv==0 && deferred_enabled==true) {
 
         /* first cleanup deferred_log_queue. We can as no other thread is accessing this */
-	thread_queue_cleanup(&deferred_log_queue, 1);
+	thread_queue_cleanup(&deferred_log_queue, 1, true);
 
 	/* second: any key-speficic data is rendered invalid - since calling thread is different */
 	/* we have ensured in the calling process that the queue was emptied                     */
