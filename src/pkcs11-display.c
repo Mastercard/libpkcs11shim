@@ -85,8 +85,8 @@
 #define CKA_TRUST_IPSEC_TUNNEL          (CKA_TRUST + 13)
 #define CKA_TRUST_IPSEC_USER            (CKA_TRUST + 14)
 #define CKA_TRUST_TIME_STAMPING         (CKA_TRUST + 15)
-#define CKA_CERT_SHA1_HASH	            (CKA_TRUST + 100)
-#define CKA_CERT_MD5_HASH		        (CKA_TRUST + 101)
+#define CKA_CERT_SHA1_HASH		    (CKA_TRUST + 100)
+#define CKA_CERT_MD5_HASH			(CKA_TRUST + 101)
 
 
 static char *buf_spec(CK_VOID_PTR buf_addr, CK_ULONG buf_len)
@@ -163,9 +163,9 @@ static void _print_generic(FILE *f, CK_LONG type, CK_VOID_PTR value, CK_ULONG si
 	    }
 	    hex_ptr += 3;
 
-            /* ascii */
+	    /* ascii */
 	    if(reveal) {
-		if (val > 31 && val < 128)
+		if (val > 31 && val < 127)
 		    *ascii_ptr = val;
 		else
 		    *ascii_ptr = '.';
@@ -1006,12 +1006,12 @@ print_mech_info(FILE *f, CK_MECHANISM_TYPE type, CK_MECHANISM_INFO_PTR minfo)
 	    (minfo->flags & CKF_WRAP)              ? "Wrap "     : "",
 	    (minfo->flags & CKF_UNWRAP)            ? "Unwrap "   : "",
 	    (minfo->flags & CKF_DERIVE)            ? "Derive "   : "",
-            (minfo->flags & CKF_EC_F_P)            ? "F(P) "     : "",
-            (minfo->flags & CKF_EC_F_2M)           ? "F(2^M) "   : "",
-            (minfo->flags & CKF_EC_ECPARAMETERS)   ? "EcParams " : "",
-            (minfo->flags & CKF_EC_NAMEDCURVE)     ? "NamedCurve " : "",
-            (minfo->flags & CKF_EC_UNCOMPRESS)     ? "Uncompress " : "",
-            (minfo->flags & CKF_EC_COMPRESS)       ? "Compress " : "",
+	    (minfo->flags & CKF_EC_F_P)            ? "F(P) "     : "",
+	    (minfo->flags & CKF_EC_F_2M)           ? "F(2^M) "   : "",
+	    (minfo->flags & CKF_EC_ECPARAMETERS)   ? "EcParams " : "",
+	    (minfo->flags & CKF_EC_NAMEDCURVE)     ? "NamedCurve " : "",
+	    (minfo->flags & CKF_EC_UNCOMPRESS)     ? "Uncompress " : "",
+	    (minfo->flags & CKF_EC_COMPRESS)       ? "Compress " : "",
 	    (minfo->flags & ~known_flags)          ? "Unknown "  : "");
 }
 

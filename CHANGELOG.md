@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.2] - 2022-10-12
+### Fixed
+- ASCII printing issue fixed (0x7F is no more printed directly)
+
 ## [1.6.1] - 2022-04-15
 ### Fixed
 - improper handling of mutex and cond variables after a fork, on linux
@@ -50,4 +54,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - initial official release
-
