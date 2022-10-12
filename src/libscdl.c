@@ -1,7 +1,10 @@
+/* -*- mode: c; c-file-style:"stroustrup"; -*- */
+
 /*
  * libscdl.c: wrappers for dlfcn() interfaces
  *
- * Copyright (C) 2010  Martin Paljak <martin@martinpaljak.net>
+ * Modified file Copyright (C) 2020  Mastercard
+ * Original file Copyright (C) 2010  Martin Paljak <martin@paljak.pri.ee>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public

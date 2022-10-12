@@ -1,5 +1,12 @@
+/* -*- mode: c; c-file-style:"stroustrup"; -*- */
+
 /*
- * Copyright (C) 2015 Mathias Brossard <mathias@brossard.or>
+ * pkcs11shim : a PKCS#11 shim library
+ *
+ * This work is based upon OpenSC pkcs11spy (https://github.com/OpenSC/OpenSC.git)
+ *
+ * Modified file Copyright (C) 2020  Mastercard
+ * Original file Copyright (C) 2015 Mathias Brossard <mathias@brossard.org>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -13,8 +20,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307,
- * USA
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
 #include "config.h"
@@ -167,7 +173,7 @@ static void shim_dump_sensitive_in(const char *name, CK_VOID_PTR data, CK_ULONG 
 	print_generic(shim_config_output(), 0, data, size, NULL);
     } else {
 	print_sensitive(shim_config_output(), 0, data, size, NULL);
-    }	
+    }
 }
 
 
@@ -741,7 +747,7 @@ shim_C_EncryptInit(CK_SESSION_HANDLE hSession, CK_MECHANISM_PTR pMechanism, CK_O
 	    deferred_fprintf(shim_config_output(), SPACER "pMechanism->pParameter->mgf=%s\n",
 		    lookup_enum(MGF_T, param->mgf));
 	    deferred_fprintf(shim_config_output(), SPACER "pMechanism->pParameter->source=%lu\n", param->source);
-	    shim_dump_string_out("pSourceData[ulSourceDalaLen]", 
+	    shim_dump_string_out("pSourceData[ulSourceDalaLen]",
 				 param->pSourceData, param->ulSourceDataLen);
 	} else {
 	    deferred_fprintf(shim_config_output(), SPACER "Parameters block for %s is empty...\n",
@@ -839,7 +845,7 @@ shim_C_DecryptInit(CK_SESSION_HANDLE hSession, CK_MECHANISM_PTR pMechanism, CK_O
 	    deferred_fprintf(shim_config_output(), SPACER  "pMechanism->pParameter->mgf=%s\n",
 		    lookup_enum(MGF_T, param->mgf));
 	    deferred_fprintf(shim_config_output(), SPACER  "pMechanism->pParameter->source=%lu\n", param->source);
-	    shim_dump_string_out("pSourceData[ulSourceDalaLen]", 
+	    shim_dump_string_out("pSourceData[ulSourceDalaLen]",
 				 param->pSourceData, param->ulSourceDataLen);
 	} else {
 	    deferred_fprintf(shim_config_output(), SPACER  "Parameters block for %s is empty...\n",
@@ -1571,11 +1577,11 @@ static void init_shim(void)
     }
 
     shim_config_logfile_prolog(true); /* print a banner */
-    
+
     if(shim_config_consistency_level()==per_callblock) {
 	use_print_mutex = true;
     }
-    
+
     modhandle = C_LoadModule(shim_config_library(), &po);
     if (modhandle && po) {
 	fprintf(shim_config_output(), "library: \"%s\"\n", shim_config_library());
@@ -1586,7 +1592,7 @@ static void init_shim(void)
 	init_shim_rv = CKR_GENERAL_ERROR;
 	return;
     }
-   
+
 }
 
 inline void shim_lock_print(void)

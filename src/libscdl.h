@@ -1,7 +1,14 @@
+/* -*- mode: c; c-file-style:"stroustrup"; -*- */
+
 /*
+ * pkcs11shim : a PKCS#11 shim library
+ *
  * libscdl.h: Function definitions for the dynamic loading minilibrary.
  *
- * Copyright (C) 2010  Martin Paljak <martin@paljak.pri.ee>
+ * This work is based upon OpenSC pkcs11spy (https://github.com/OpenSC/OpenSC.git)
+ *
+ * Modified file Copyright (C) 2020  Mastercard
+ * Original file Copyright (C) 2010  Martin Paljak <martin@paljak.pri.ee>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public

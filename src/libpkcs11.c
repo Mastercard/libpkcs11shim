@@ -1,8 +1,12 @@
+/* -*- mode: c; c-file-style:"stroustrup"; -*- */
+
 /*
- * Convenience pkcs11 library that can be linked into an application,
- * and will bind to a specific pkcs11 module.
+ * pkcs11shim : a PKCS#11 shim library
  *
- * Copyright (C) 2002  Olaf Kirch <okir@suse.de>
+ * This work is based upon OpenSC pkcs11spy (https://github.com/OpenSC/OpenSC.git)
+ *
+ * Modified library Copyright (C) 2020  Mastercard
+ * Original library Copyright (C) 2002  Olaf Kirch <okir@suse.de>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public

@@ -1,6 +1,30 @@
 /* -*- mode: c; c-file-style:"stroustrup"; -*- */
 
-/* threadqueue original code: https://stackoverflow.com/a/4577987/979318 */
+/*
+ * Copyright (c) 2021 Mastercard
+ *
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 2.1 of the License, or (at your option) any later version.
+ *
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public
+ * License along with this library; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ */
+
+/* threadqueue adapted/modified from: https://stackoverflow.com/a/4577987/979318
+ * original author: "nos" https://stackoverflow.com/users/126769/nos
+ *
+ * originally licensed under Creative Commons Attribution-ShareALike licence
+ * terms of license: https://creativecommons.org/licenses/by-sa/2.5/
+ *
+ */
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -24,11 +48,11 @@ static inline struct msglist *get_msglist(struct threadqueue *queue)
     struct msglist *tmp;
 
     if(queue->msgpool != NULL) {
-        tmp = queue->msgpool;
-        queue->msgpool = tmp->next;
-        queue->msgpool_length--;
+	tmp = queue->msgpool;
+	queue->msgpool = tmp->next;
+	queue->msgpool_length--;
     } else {
-        tmp = malloc(sizeof *tmp); /* it will be initialized */
+	tmp = malloc(sizeof *tmp); /* it will be initialized */
     }
 
     return tmp;
@@ -37,19 +61,19 @@ static inline struct msglist *get_msglist(struct threadqueue *queue)
 static inline void release_msglist(struct threadqueue *queue,struct msglist *node)
 {
     if(queue->msgpool_length > ( queue->length/8 + MSGPOOL_SIZE)) {
-        free(node);
+	free(node);
     } else {
-        node->msg.data = NULL;
-        node->msg.msgtype = 0;
-        node->next = queue->msgpool;
-        queue->msgpool = node;
-        queue->msgpool_length++;
+	node->msg.data = NULL;
+	node->msg.msgtype = 0;
+	node->next = queue->msgpool;
+	queue->msgpool = node;
+	queue->msgpool_length++;
     }
     if(queue->msgpool_length > (queue->length/4 + MSGPOOL_SIZE*10)) {
-        struct msglist *tmp = queue->msgpool;
-        queue->msgpool = tmp->next;
-        free(tmp);
-        queue->msgpool_length--;
+	struct msglist *tmp = queue->msgpool;
+	queue->msgpool = tmp->next;
+	free(tmp);
+	queue->msgpool_length--;
     }
 }
 
@@ -57,18 +81,18 @@ int thread_queue_init(struct threadqueue *queue)
 {
     int ret = 0;
     if (queue == NULL) {
-        return EINVAL;
+	return EINVAL;
     }
     memset(queue, 0, sizeof(struct threadqueue));
     ret = pthread_cond_init(&queue->cond, NULL);
     if (ret != 0) {
-        return ret;
+	return ret;
     }
 
     ret = pthread_mutex_init(&queue->mutex, NULL);
     if (ret != 0) {
-        pthread_cond_destroy(&queue->cond);
-        return ret;
+	pthread_cond_destroy(&queue->cond);
+	return ret;
     }
 
     return 0;
@@ -81,19 +105,19 @@ int thread_queue_add(struct threadqueue *queue, void *data, long msgtype)
     pthread_mutex_lock(&queue->mutex);
     newmsg = get_msglist(queue);
     if (newmsg == NULL) {
-        pthread_mutex_unlock(&queue->mutex);
-        return ENOMEM;
+	pthread_mutex_unlock(&queue->mutex);
+	return ENOMEM;
     }
     newmsg->msg.data = data;
     newmsg->msg.msgtype = msgtype;
 
     newmsg->next = NULL;
     if (queue->last == NULL) {
-        queue->last = newmsg;
-        queue->first = newmsg;
+	queue->last = newmsg;
+	queue->first = newmsg;
     } else {
-        queue->last->next = newmsg;
-        queue->last = newmsg;
+	queue->last->next = newmsg;
+	queue->last = newmsg;
     }
 
     if(queue->length == 0)
@@ -112,34 +136,34 @@ int thread_queue_get(struct threadqueue *queue, const struct timespec *timeout, 
     struct timespec abstimeout;
 
     if (queue == NULL || msg == NULL) {
-        return EINVAL;
+	return EINVAL;
     }
     if (timeout) {
-        struct timeval now;
+	struct timeval now;
 
-        gettimeofday(&now, NULL);
-        abstimeout.tv_sec = now.tv_sec + timeout->tv_sec;
-        abstimeout.tv_nsec = (now.tv_usec * 1000) + timeout->tv_nsec;
-        if (abstimeout.tv_nsec >= 1000000000) {
-            abstimeout.tv_sec++;
-            abstimeout.tv_nsec -= 1000000000;
-        }
+	gettimeofday(&now, NULL);
+	abstimeout.tv_sec = now.tv_sec + timeout->tv_sec;
+	abstimeout.tv_nsec = (now.tv_usec * 1000) + timeout->tv_nsec;
+	if (abstimeout.tv_nsec >= 1000000000) {
+	    abstimeout.tv_sec++;
+	    abstimeout.tv_nsec -= 1000000000;
+	}
     }
 
     pthread_mutex_lock(&queue->mutex);
 
     /* Will wait until awakened by a signal or broadcast */
     while (queue->first == NULL && ret != ETIMEDOUT) {  //Need to loop to handle spurious wakeups
-        if (timeout) {
-            ret = pthread_cond_timedwait(&queue->cond, &queue->mutex, &abstimeout);
-        } else {
-            pthread_cond_wait(&queue->cond, &queue->mutex);
+	if (timeout) {
+	    ret = pthread_cond_timedwait(&queue->cond, &queue->mutex, &abstimeout);
+	} else {
+	    pthread_cond_wait(&queue->cond, &queue->mutex);
 
-        }
+	}
     }
     if (ret == ETIMEDOUT) {
-        pthread_mutex_unlock(&queue->mutex);
-        return ret;
+	pthread_mutex_unlock(&queue->mutex);
+	return ret;
     }
 
     firstrec = queue->first;
@@ -147,8 +171,8 @@ int thread_queue_get(struct threadqueue *queue, const struct timespec *timeout, 
     queue->length--;
 
     if (queue->first == NULL) {
-        queue->last = NULL;     // we know this since we hold the lock
-        queue->length = 0;
+	queue->last = NULL;     // we know this since we hold the lock
+	queue->length = 0;
     }
 
 
@@ -170,7 +194,7 @@ int thread_queue_cleanup(struct threadqueue *queue, int freedata, bool afterfork
     struct msglist *recs[2];
     int ret,i;
     if (queue == NULL) {
-        return EINVAL;
+	return EINVAL;
     }
 
     if(!afterfork) {
@@ -180,15 +204,15 @@ int thread_queue_cleanup(struct threadqueue *queue, int freedata, bool afterfork
     recs[0] = queue->first;
     recs[1] = queue->msgpool;
     for(i = 0; i < 2 ; i++) {
-        rec = recs[i];
-        while (rec) {
-            next = rec->next;
-            if (freedata) {
-                free(rec->msg.data);
-            }
-            free(rec);
-            rec = next;
-        }
+	rec = recs[i];
+	while (rec) {
+	    next = rec->next;
+	    if (freedata) {
+		free(rec->msg.data);
+	    }
+	    free(rec);
+	    rec = next;
+	}
     }
 
     if(!afterfork) {

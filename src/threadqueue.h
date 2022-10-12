@@ -1,5 +1,34 @@
+/* -*- mode: c; c-file-style:"stroustrup"; -*- */
+
+/*
+ * Copyright (c) 2021 Mastercard
+ *
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 2.1 of the License, or (at your option) any later version.
+ *
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public
+ * License along with this library; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ */
+
+/* threadqueue adapted/modified from: https://stackoverflow.com/a/4577987/979318
+ * original author: "nos" https://stackoverflow.com/users/126769/nos
+ *
+ * originally licensed under Creative Commons Attribution-ShareALike licence
+ * terms of license: https://creativecommons.org/licenses/by-sa/2.5/
+ *
+ */
+
 #ifndef _THREADQUEUE_H_
 #define _THREADQUEUE_H_ 1
+
 
 #include <pthread.h>
 #include <stdbool.h>
@@ -43,18 +72,18 @@ extern "C" {
  *
  */
 struct threadmsg{
-        /**
-         * Holds the data.
-         */
-        void *data;
-        /**
-         * Holds the messagetype
-         */
-        long msgtype;
-        /**
-        * Holds the current queue lenght. Might not be meaningful if there's several readers
-        */
-        long qlength;
+	/**
+	 * Holds the data.
+	 */
+	void *data;
+	/**
+	 * Holds the messagetype
+	 */
+	long msgtype;
+	/**
+	* Holds the current queue lenght. Might not be meaningful if there's several readers
+	*/
+	long qlength;
 
 };
 
@@ -72,19 +101,19 @@ struct threadqueue {
  * Length of the queue, never set this, never read this.
  * Use #threadqueue_length to read it.
  */
-        long length;
+	long length;
 /**
  * Mutex for the queue, never touch.
  */
-        pthread_mutex_t mutex;
+	pthread_mutex_t mutex;
 /**
  * Condition variable for the queue, never touch.
  */
-        pthread_cond_t cond;
+	pthread_cond_t cond;
 /**
  * Internal pointers for the queue, never touch.
  */
-        struct msglist *first,*last;
+	struct msglist *first,*last;
 /**
  * Internal cache of msglists
  */
@@ -187,7 +216,7 @@ int thread_queue_cleanup(struct threadqueue *queue, int freedata, bool afterfork
 
 void thread_queue_lock(struct threadqueue *queue);
 void thread_queue_unlock(struct threadqueue *queue);
-  
+
 
 #ifdef __cplusplus
 }

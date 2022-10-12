@@ -3,34 +3,36 @@
 /*
  * Copyright (c) 2021 Mastercard
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 2.1 of the License, or (at your option) any later version.
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * You should have received a copy of the GNU Lesser General Public
+ * License along with this library; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
 #if !defined(_SHIM_CONFIG_H_)
 #define _SHIM_CONFIG_H_
-/* 
+/*
  * consistency_level_t: defines the desired consistency level
- *                      - basic: 
+ *                      - basic:
  *                        Logs are directly written, from the same thread, to the output file.
  *                        Logs are therefore synchronous with the thread execution.
  *                        If several threads are running concurrently, log entries may overlap.
  *                        The basic mode is adequate for single-threaded executions.
  *
- *                      - per_callblock: 
+ *                      - per_callblock:
  *                        Logs are still written from the same thread as the caller,
  *                        but there is a mutex preventing log entries to overlap, within
  *                        one calling block. As a consequence, log entries will never
- *                        overlap for multithreaded executions. 
+ *                        overlap for multithreaded executions.
  *                        However, it has a significant impact on performance.
  *                        Use this mode for logging on multithreaded executions, where impact
  *                        on performance is acceptable, or if you absolutely need to print
@@ -48,7 +50,7 @@
  *                        and loss of synchronicity between logs and other output.
  *                        Beware: this mode may overflow memory, if writing to the output can't keep up
  *                        with the rate of incoming messages. You have been warned.
- *                        
+ *
  */
 
 #include <stdio.h>

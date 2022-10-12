@@ -1,7 +1,12 @@
 /* -*- mode: c; c-file-style:"stroustrup"; -*- */
 
 /*
- * Copyright (C) 2015 Mathias Brossard <mathias@brossard.org>
+ * pkcs11shim : a PKCS#11 shim library
+ *
+ * This work is based upon OpenSC pkcs11spy (https://github.com/OpenSC/OpenSC.git)
+ *
+ * Modified file Copyright (C) 2020  Mastercard
+ * Original file Copyright (C) 2015 Mathias Brossard <mathias@brossard.org>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -15,8 +20,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307,
- * USA
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
 #include "config.h"
