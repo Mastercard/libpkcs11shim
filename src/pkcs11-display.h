@@ -66,7 +66,8 @@ enum ck_type{
   USR_T,
   STA_T,
   CKD_T,
-  RV_T
+  RV_T,
+  CKZ_T
 };
 
 const char *lookup_enum_spec(enum_spec *spec, CK_ULONG value);

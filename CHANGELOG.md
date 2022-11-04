@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.0] - 2022-11-04
+### Added
+- OAEP parameters printed out when using `C_Wrap`, `C_Unwrap`, `C_EncryptInit` or `C_DecryptInit`
+
 ## [1.6.2] - 2022-10-12
 ### Fixed
 - ASCII printing issue fixed (0x7F is no more printed directly)

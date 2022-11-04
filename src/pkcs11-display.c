@@ -225,8 +225,7 @@ static void print_dn(FILE *f, CK_LONG type, CK_VOID_PTR value, CK_ULONG size, CK
 #endif
 }
 
-void
-print_print(FILE *f, CK_LONG type, CK_VOID_PTR value, CK_ULONG size, CK_VOID_PTR arg)
+void print_print(FILE *f, CK_LONG type, CK_VOID_PTR value, CK_ULONG size, CK_VOID_PTR arg)
 {
     CK_ULONG i, j=0;
     CK_BYTE  c;
@@ -670,6 +669,10 @@ static enum_specs ck_ckd_s[] = {
     { CKD_SHA512_KDF, "CKD_SHA512_KDF" },
 };
 
+static enum_specs ck_ckz_s[] = {
+    { CKZ_DATA_SPECIFIED, "CKZ_DATA_SPECIFIED" },
+};
+
 #define SZ_SPECS sizeof(enum_specs)
 
 enum_spec ck_types[] = {
@@ -682,11 +685,13 @@ enum_spec ck_types[] = {
     { STA_T, ck_sta_s, sizeof(ck_sta_s) / SZ_SPECS, "CK_STATE"        },
     { CKD_T, ck_ckd_s, sizeof(ck_ckd_s) / SZ_SPECS, "CK_EC_KDF_TYPE"      },
     { RV_T,  ck_err_s, sizeof(ck_err_s) / SZ_SPECS, "CK_RV"               },
+    { CKZ_T, ck_ckz_s, sizeof(ck_ckz_s) / SZ_SPECS, "CK_RSA_PKCS_OAEP_SOURCE_TYPE" },
 };
 
 static enum_spec ck_key_t[] = { { KEY_T, ck_key_s, sizeof(ck_key_s) / SZ_SPECS, "CK_KEY_TYPE" } };
 static enum_spec ck_cls_t[] = { { OBJ_T, ck_cls_s, sizeof(ck_cls_s) / SZ_SPECS, "CK_OBJECT_CLASS" } };
 static enum_spec ck_crt_t[] = { { CRT_T, ck_crt_s, sizeof(ck_crt_s) / SZ_SPECS, "CK_CERTIFICATE_TYPE" } };
+static enum_spec ck_ckz_t[] = { { CKZ_T, ck_ckz_s, sizeof(ck_ckz_s) / SZ_SPECS, "CK_RSA_PKCS_OAEP_SOURCE_TYPE" } };
 
 type_spec ck_attribute_specs[] = {
     { CKA_CLASS             , "CKA_CLASS            ", print_enum,    ck_cls_t },

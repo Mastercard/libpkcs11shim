@@ -746,7 +746,8 @@ shim_C_EncryptInit(CK_SESSION_HANDLE hSession, CK_MECHANISM_PTR pMechanism, CK_O
 		    lookup_enum(MEC_T, param->hashAlg));
 	    deferred_fprintf(shim_config_output(), SPACER "pMechanism->pParameter->mgf=%s\n",
 		    lookup_enum(MGF_T, param->mgf));
-	    deferred_fprintf(shim_config_output(), SPACER "pMechanism->pParameter->source=%lu\n", param->source);
+	    deferred_fprintf(shim_config_output(), SPACER "pMechanism->pParameter->source=%s\n",
+		    lookup_enum(CKZ_T, param->source));
 	    shim_dump_string_out("pSourceData[ulSourceDalaLen]",
 				 param->pSourceData, param->ulSourceDataLen);
 	} else {
@@ -844,7 +845,8 @@ shim_C_DecryptInit(CK_SESSION_HANDLE hSession, CK_MECHANISM_PTR pMechanism, CK_O
 		    lookup_enum(MEC_T, param->hashAlg));
 	    deferred_fprintf(shim_config_output(), SPACER  "pMechanism->pParameter->mgf=%s\n",
 		    lookup_enum(MGF_T, param->mgf));
-	    deferred_fprintf(shim_config_output(), SPACER  "pMechanism->pParameter->source=%lu\n", param->source);
+	    deferred_fprintf(shim_config_output(), SPACER "pMechanism->pParameter->source=%s\n",
+		    lookup_enum(CKZ_T, param->source));
 	    shim_dump_string_out("pSourceData[ulSourceDalaLen]",
 				 param->pSourceData, param->ulSourceDataLen);
 	} else {
@@ -1323,9 +1325,46 @@ shim_C_WrapKey(CK_SESSION_HANDLE hSession, CK_MECHANISM_PTR pMechanism,
 
     enter("C_WrapKey",&t);
     shim_dump_ulong_in("hSession", hSession);
-    deferred_fprintf(shim_config_output(), SPACER  "pMechanism->type=%s\n", lookup_enum(MEC_T, pMechanism->mechanism));
+    deferred_fprintf(shim_config_output(), SPACER "pMechanism->type=%s\n", lookup_enum(MEC_T, pMechanism->mechanism));
+    switch (pMechanism->mechanism) {
+    case CKM_AES_GCM:
+	if (pMechanism->pParameter != NULL) {
+	    CK_GCM_PARAMS *param =
+		(CK_GCM_PARAMS *) pMechanism->pParameter;
+	    shim_dump_string_in("pIv[ulIvLen]",
+				param->pIv, param->ulIvLen);
+	    shim_dump_ulong_in("ulIvBits", param->ulIvBits);
+	    shim_dump_string_in("pAAD[ulAADLen]",
+				param->pAAD, param->ulAADLen);
+	    deferred_fprintf(shim_config_output(), SPACER "pMechanism->pParameter->ulTagBits=%lu\n", param->ulTagBits);
+	} else {
+	    deferred_fprintf(shim_config_output(), SPACER "Parameters block for %s is empty...\n",
+		    lookup_enum(MEC_T, pMechanism->mechanism));
+	}
+	break;
+    case CKM_RSA_PKCS_OAEP:
+	if (pMechanism->pParameter != NULL) {
+	    CK_RSA_PKCS_OAEP_PARAMS *param =
+		(CK_RSA_PKCS_OAEP_PARAMS *) pMechanism->pParameter;
+	    deferred_fprintf(shim_config_output(), SPACER "pMechanism->pParameter->hashAlg=%s\n",
+		    lookup_enum(MEC_T, param->hashAlg));
+	    deferred_fprintf(shim_config_output(), SPACER "pMechanism->pParameter->mgf=%s\n",
+		    lookup_enum(MGF_T, param->mgf));
+	    deferred_fprintf(shim_config_output(), SPACER "pMechanism->pParameter->source=%s\n",
+		    lookup_enum(CKZ_T, param->source));
+	    shim_dump_string_out("pSourceData[ulSourceDalaLen]",
+				 param->pSourceData, param->ulSourceDataLen);
+	} else {
+	    deferred_fprintf(shim_config_output(), SPACER "Parameters block for %s is empty...\n",
+		    lookup_enum(MEC_T, pMechanism->mechanism));
+	}
+	break;
+    default:
+	shim_dump_string_in("pParameter[ulParameterLen]", pMechanism->pParameter, pMechanism->ulParameterLen);
+	break;
+    }
     shim_dump_ulong_in("hWrappingKey", hWrappingKey);
-    shim_dump_ulong_in("hKey", hKey);
+    shim_dump_ulong_in("hKey", hKey);    
     rv = po->C_WrapKey(hSession, pMechanism, hWrappingKey, hKey, pWrappedKey, pulWrappedKeyLen);
     if (rv == CKR_OK)
 	shim_dump_string_out("pWrappedKey[*pulWrappedKeyLen]", pWrappedKey, *pulWrappedKeyLen);
@@ -1344,7 +1383,44 @@ shim_C_UnwrapKey(CK_SESSION_HANDLE hSession, CK_MECHANISM_PTR pMechanism,
 
     enter("C_UnwrapKey",&t);
     shim_dump_ulong_in("hSession", hSession);
-    deferred_fprintf(shim_config_output(), SPACER  "pMechanism->type=%s\n", lookup_enum(MEC_T, pMechanism->mechanism));
+    deferred_fprintf(shim_config_output(), SPACER "pMechanism->type=%s\n", lookup_enum(MEC_T, pMechanism->mechanism));
+    switch (pMechanism->mechanism) {
+    case CKM_AES_GCM:
+	if (pMechanism->pParameter != NULL) {
+	    CK_GCM_PARAMS *param =
+		(CK_GCM_PARAMS *) pMechanism->pParameter;
+	    shim_dump_string_in("pIv[ulIvLen]",
+				param->pIv, param->ulIvLen);
+	    shim_dump_ulong_in("ulIvBits", param->ulIvBits);
+	    shim_dump_string_in("pAAD[ulAADLen]",
+				param->pAAD, param->ulAADLen);
+	    deferred_fprintf(shim_config_output(), SPACER "pMechanism->pParameter->ulTagBits=%lu\n", param->ulTagBits);
+	} else {
+	    deferred_fprintf(shim_config_output(), SPACER "Parameters block for %s is empty...\n",
+		    lookup_enum(MEC_T, pMechanism->mechanism));
+	}
+	break;
+    case CKM_RSA_PKCS_OAEP:
+	if (pMechanism->pParameter != NULL) {
+	    CK_RSA_PKCS_OAEP_PARAMS *param =
+		(CK_RSA_PKCS_OAEP_PARAMS *) pMechanism->pParameter;
+	    deferred_fprintf(shim_config_output(), SPACER "pMechanism->pParameter->hashAlg=%s\n",
+		    lookup_enum(MEC_T, param->hashAlg));
+	    deferred_fprintf(shim_config_output(), SPACER "pMechanism->pParameter->mgf=%s\n",
+		    lookup_enum(MGF_T, param->mgf));
+	    deferred_fprintf(shim_config_output(), SPACER "pMechanism->pParameter->source=%s\n",
+		    lookup_enum(CKZ_T, param->source));
+	    shim_dump_string_out("pSourceData[ulSourceDalaLen]",
+				 param->pSourceData, param->ulSourceDataLen);
+	} else {
+	    deferred_fprintf(shim_config_output(), SPACER "Parameters block for %s is empty...\n",
+		    lookup_enum(MEC_T, pMechanism->mechanism));
+	}
+	break;
+    default:
+	shim_dump_string_in("pParameter[ulParameterLen]", pMechanism->pParameter, pMechanism->ulParameterLen);
+	break;
+    }
     shim_dump_ulong_in("hUnwrappingKey", hUnwrappingKey);
     shim_dump_string_in("pWrappedKey[ulWrappedKeyLen]", pWrappedKey, ulWrappedKeyLen);
     shim_attribute_list_in("pTemplate", pTemplate, ulAttributeCount);
