@@ -115,13 +115,16 @@ static void enter(const char *function, struct timeval *tv)
     struct tm threadlocal_tm;		/* used by localtime_r() */
     char time_string[40];
 
+    /* atomically increase counter, and keep a copy of the value before increment */
+    size_t callcnt=atomic_fetch_add_explicit(&cnt, 1, memory_order_relaxed);
+
     gettimeofday (tv, NULL);
     tm = localtime_r(&tv->tv_sec, &threadlocal_tm);
     strftime (time_string, sizeof(time_string), "%F %H:%M:%S", tm);
 
     if(use_print_mutex) pthread_mutex_lock(&print_mutex);
 
-    deferred_fprintf(shim_config_output(), CNTSTRING, cnt, function);
+    deferred_fprintf(shim_config_output(), CNTSTRING, callcnt, function);
     deferred_fprintf(shim_config_output(), "[pid] %ld\n", shim_config_pid());
     deferred_fprintf(shim_config_output(), "[ppd] %ld\n", shim_config_ppid());
     deferred_fprintf(shim_config_output(), "[tid] %ld\n",
@@ -135,7 +138,6 @@ static void enter(const char *function, struct timeval *tv)
 		     );
     deferred_fprintf(shim_config_output(), "[tic] %s.%06ld\n", time_string, (long)tv->tv_usec);
     /* we are just incrementing a counter, the relaxed memory model can be safely used */
-    atomic_fetch_add_explicit(&cnt, 1, memory_order_relaxed);
 }
 
 /* postcall */
