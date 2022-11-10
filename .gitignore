@@ -1,4 +1,3 @@
-*~
 *.tar.gz
 /aclocal.m4
 /ar-lib
@@ -35,3 +34,7 @@ Makefile.in
 .pkcs11rc
 pkcs11rc
 
+# emacs
+TAGS
+*~
+ 
