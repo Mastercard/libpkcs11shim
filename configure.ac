@@ -41,11 +41,19 @@ AC_SUBST([$1], ['$2'])
 
 define(VERSION_MAJOR,1)
 define(VERSION_MINOR,7)
-define(VERSION_FIX,1)
+define(VERSION_FIX,2)
 
-# Following http://web.mit.edu/gnu/doc/html/libtool.html#SEC36
+# Following rules at http://web.mit.edu/gnu/doc/html/libtool.html#SEC36
+#
+#    Start with version information of `0:0:0' for each libtool library.
+#    Update the version information only immediately before a public release of your software. More frequent updates are unnecessary, and only guarantee that the current interface number gets larger faster.
+#    If the library source code has changed at all since the last update, then increment revision (`c:r:a' becomes `c:r+1:a').
+#    If any interfaces have been added, removed, or changed since the last update, increment current, and set revision to 0.
+#    If any interfaces have been added since the last public release, then increment age.
+#    If any interfaces have been removed since the last public release, then set age to 0.
+
 define(ABI_CUR,0)
-define(ABI_REV,10)
+define(ABI_REV,11)
 define(ABI_AGE,0)
 
 
