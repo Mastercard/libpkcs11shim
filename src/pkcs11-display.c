@@ -146,6 +146,10 @@ static void _print_generic(FILE *f, CK_LONG type, CK_VOID_PTR value, CK_ULONG si
 
 	memset(ascii, ' ', sizeof ascii);
 	ascii[sizeof ascii -1] = 0;
+
+	memset(hex, ' ', sizeof hex);
+	hex[sizeof hex -1] = 0;
+
 	deferred_fprintf(f, "%s", buf_spec(value, size));
 	for(i = 0; i < size; i++) {
 	    CK_BYTE val;
@@ -309,6 +313,12 @@ static enum_specs ck_key_s[] = {
     { CKK_GOSTR3411     , "CKK_GOSTR3411      " },
     { CKK_GOST28147     , "CKK_GOST28147      " }
 };
+
+static char custom_mec_s[32][30] = {0};
+static size_t custom_mec_s_index = 0;
+/* global lock for custom mechanism buffer index */
+pthread_mutex_t custom_mec_s_index_mutex = PTHREAD_MUTEX_INITIALIZER;
+
 
 static enum_specs ck_mec_s[] = {
     { CKM_RSA_PKCS_KEY_PAIR_GEN    , "CKM_RSA_PKCS_KEY_PAIR_GEN    " },
@@ -832,26 +842,47 @@ type_spec ck_attribute_specs[] = {
 CK_ULONG ck_attribute_num = sizeof(ck_attribute_specs)/sizeof(type_spec);
 
 
-const char *
-lookup_enum_spec(enum_spec *spec, CK_ULONG value)
+// TODO: use dichotomic search
+const char *lookup_enum_spec(enum_spec *spec, CK_ULONG value)
 {
     CK_ULONG i;
 
-    for(i = 0; i < spec->size; i++)
-	if(spec->specs[i].type == value)
+    for(i = 0; i < spec->size; i++) {
+	if(spec->specs[i].type == value) {
 	    return spec->specs[i].name;
+	}
+    }
     return NULL;
 }
 
 
-const char *
-lookup_enum(CK_ULONG type, CK_ULONG value)
+const char *lookup_enum(ck_type type, CK_ULONG value)
 {
     CK_ULONG i;
 
-    for(i = 0; ck_types[i].type < ( sizeof(ck_types) / sizeof(enum_spec) ) ; i++)
-	if(ck_types[i].type == type)
+    /* special case: we want yet to print the vendor mechanism, if it is not found in the table */
+    if(type==MEC_T) {
+	if(value >= CKM_VENDOR_DEFINED) {
+
+	    /* in this case, we want to print the mechanism value as an hexadecimal entry */
+	    /* we use the custom_mec_s for that */
+	    /* TODO: limitation as the array is only 32 entries long, there is a risk of overwrite */
+	    pthread_mutex_lock(&custom_mec_s_index_mutex);
+	    size_t index = custom_mec_s_index;
+	    ++custom_mec_s_index;
+	    custom_mec_s_index %= 32;
+	    pthread_mutex_unlock(&custom_mec_s_index_mutex);
+
+	    snprintf(custom_mec_s[index], 30, "Vendor defined (%08.8lx)", value);
+	    return (const char *) custom_mec_s[index];
+	}
+    }
+    for(i = 0; ck_types[i].type < ( sizeof(ck_types) / sizeof(enum_spec) ) ; i++) {
+	if(ck_types[i].type == type) {
 	    return lookup_enum_spec(&(ck_types[i]), value);
+	}
+    }
+
     return NULL;
 }
 
@@ -999,29 +1030,29 @@ print_mech_info(FILE *f, CK_MECHANISM_TYPE type, CK_MECHANISM_INFO_PTR minfo)
 	deferred_fprintf(f, "      Unknown Mechanism (%08lx) : ", type);
 
     deferred_fprintf(f, "min:%lu max:%lu flags:0x%lX ",
-	    (unsigned long) minfo->ulMinKeySize,
-	    (unsigned long) minfo->ulMaxKeySize, minfo->flags);
+		     (unsigned long) minfo->ulMinKeySize,
+		     (unsigned long) minfo->ulMaxKeySize, minfo->flags);
     deferred_fprintf(f, "( %s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s)\n",
-	    (minfo->flags & CKF_HW)                ? "Hardware " : "",
-	    (minfo->flags & CKF_ENCRYPT)           ? "Encrypt "  : "",
-	    (minfo->flags & CKF_DECRYPT)           ? "Decrypt "  : "",
-	    (minfo->flags & CKF_DIGEST)            ? "Digest "   : "",
-	    (minfo->flags & CKF_SIGN)              ? "Sign "     : "",
-	    (minfo->flags & CKF_SIGN_RECOVER)      ? "SigRecov " : "",
-	    (minfo->flags & CKF_VERIFY)            ? "Verify "   : "",
-	    (minfo->flags & CKF_VERIFY_RECOVER)    ? "VerRecov " : "",
-	    (minfo->flags & CKF_GENERATE)          ? "Generate " : "",
-	    (minfo->flags & CKF_GENERATE_KEY_PAIR) ? "KeyPair "  : "",
-	    (minfo->flags & CKF_WRAP)              ? "Wrap "     : "",
-	    (minfo->flags & CKF_UNWRAP)            ? "Unwrap "   : "",
-	    (minfo->flags & CKF_DERIVE)            ? "Derive "   : "",
-	    (minfo->flags & CKF_EC_F_P)            ? "F(P) "     : "",
-	    (minfo->flags & CKF_EC_F_2M)           ? "F(2^M) "   : "",
-	    (minfo->flags & CKF_EC_ECPARAMETERS)   ? "EcParams " : "",
-	    (minfo->flags & CKF_EC_NAMEDCURVE)     ? "NamedCurve " : "",
-	    (minfo->flags & CKF_EC_UNCOMPRESS)     ? "Uncompress " : "",
-	    (minfo->flags & CKF_EC_COMPRESS)       ? "Compress " : "",
-	    (minfo->flags & ~known_flags)          ? "Unknown "  : "");
+		     (minfo->flags & CKF_HW)                ? "Hardware " : "",
+		     (minfo->flags & CKF_ENCRYPT)           ? "Encrypt "  : "",
+		     (minfo->flags & CKF_DECRYPT)           ? "Decrypt "  : "",
+		     (minfo->flags & CKF_DIGEST)            ? "Digest "   : "",
+		     (minfo->flags & CKF_SIGN)              ? "Sign "     : "",
+		     (minfo->flags & CKF_SIGN_RECOVER)      ? "SigRecov " : "",
+		     (minfo->flags & CKF_VERIFY)            ? "Verify "   : "",
+		     (minfo->flags & CKF_VERIFY_RECOVER)    ? "VerRecov " : "",
+		     (minfo->flags & CKF_GENERATE)          ? "Generate " : "",
+		     (minfo->flags & CKF_GENERATE_KEY_PAIR) ? "KeyPair "  : "",
+		     (minfo->flags & CKF_WRAP)              ? "Wrap "     : "",
+		     (minfo->flags & CKF_UNWRAP)            ? "Unwrap "   : "",
+		     (minfo->flags & CKF_DERIVE)            ? "Derive "   : "",
+		     (minfo->flags & CKF_EC_F_P)            ? "F(P) "     : "",
+		     (minfo->flags & CKF_EC_F_2M)           ? "F(2^M) "   : "",
+		     (minfo->flags & CKF_EC_ECPARAMETERS)   ? "EcParams " : "",
+		     (minfo->flags & CKF_EC_NAMEDCURVE)     ? "NamedCurve " : "",
+		     (minfo->flags & CKF_EC_UNCOMPRESS)     ? "Uncompress " : "",
+		     (minfo->flags & CKF_EC_COMPRESS)       ? "Compress " : "",
+		     (minfo->flags & ~known_flags)          ? "Unknown "  : "");
 }
 
 
