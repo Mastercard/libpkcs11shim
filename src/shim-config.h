@@ -72,6 +72,7 @@ pid_t shim_config_pid();
 pid_t shim_config_ppid();
 const char * shim_config_library();
 bool shim_config_canrevealpin();
+bool shim_config_preserved_is_a_string();
 void shim_config_logfile_prolog(bool firsttime);
 
 

@@ -25,10 +25,10 @@ Makefile.in
 *.la
 .deps/
 .libs/
-
 /lib
 /usr
 /*.ign/
+*.log
 
 # from pkcs11-tools
 .pkcs11rc

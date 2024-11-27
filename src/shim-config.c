@@ -35,6 +35,7 @@ struct config_t {
     pid_t pid;
     pid_t ppid;
     bool revealpin;
+    bool preserved_is_a_string;
 };
 
 static void shim_config_atexit_handler(void);
@@ -201,6 +202,24 @@ static void shim_config_set_pin_visibility()
     }
 }
 
+/*
+ *  PKCS11SHIM_PRESERVED_IS_A_STRING is useful only for NSS-like libraries
+ *  when defined, it will try to interpret the pointer pReserved in C_CK_INITIALIZE_ARGS as
+ *  a pointer to a configuration string.
+ *
+ */
+static void shim_config_set_preserved_assumption() {
+    char *preserved_assumption = getenv("PKCS11SHIM_PRESERVED_IS_A_STRING");
+    if(preserved_assumption && (
+	   ( strcasecmp(preserved_assumption,"1")==0 ) ||
+	   ( strcasecmp(preserved_assumption,"yes")==0 ) ||
+	   ( strcasecmp(preserved_assumption,"on")==0 ) ||
+	   ( strcasecmp(preserved_assumption,"true")==0 ))) {
+	config.preserved_is_a_string = true;
+    } else {
+	config.preserved_is_a_string = false;
+    }
+}
 
 bool init_shim_config()
 {
@@ -223,6 +242,9 @@ bool init_shim_config()
 
     /* set PIN visibility */
     shim_config_set_pin_visibility();
+
+    /* set pReserved assumption */
+    shim_config_set_preserved_assumption();
 
     /* set log output consistency level */
     char *consistency = getenv("PKCS11SHIM_CONSISTENCY");
@@ -287,6 +309,10 @@ inline bool shim_config_canrevealpin()
     return config.revealpin;
 }
 
+inline bool shim_config_preserved_is_a_string()
+{
+    return config.preserved_is_a_string;
+}
 
 static void shim_config_atexit_handler(void)
 {
@@ -336,19 +362,19 @@ void shim_config_logfile_prolog(bool firsttime)
     switch(shim_config_consistency_level()) {
     case per_callblock:		/* consistency per call accross threads, no deferred output */
 	fprintf(shim_config_output(), "PKCS11SHIM_CONSISTENCY=1\n");
-	fprintf(shim_config_output(), "*** WARNING: logging is serialized and grouped per API call, it may affect performance ***\n");
+	fprintf(shim_config_output(), "*** WARNING: logging is synchronized with API call, it may affect performance         ***\n");
 	break;
 
     case deferred:
 	fprintf(shim_config_output(), "PKCS11SHIM_CONSISTENCY=2\n");
 	fprintf(shim_config_output(), "*** WARNING: logging is deferred, log output is no more in sync with execution thread ***\n");
-	fprintf(shim_config_output(), "*** WARNING: this mode may lead to memory overflow                                    ***\n");
+	fprintf(shim_config_output(), "*** WARNING: this mode may lead to memory exhaustion (on Linux, OOM kill may kick in) ***\n");
 	break;
 
     case basic:
     default:
 	fprintf(shim_config_output(), "PKCS11SHIM_CONSISTENCY=0\n");
-	fprintf(shim_config_output(), "*** WARNING: logging using basic mode, log entries may overlap for multithreaded applications ***\n");
+	fprintf(shim_config_output(), "*** WARNING: logging using basic mode, log entries may overlap for multithreaded apps ***\n");
 
     }
 
@@ -356,5 +382,11 @@ void shim_config_logfile_prolog(bool firsttime)
 	fprintf(shim_config_output(), "*** WARNING: PIN reveal mode enabled, log file may contain PINs or passphrases        ***\n");
     }
 
+    if(shim_config_preserved_is_a_string()) {
+	fprintf(shim_config_output(), "*** WARNING: PKCS11SHIM_PRESERVED_IS_A_STRING set, CK_C_INITIALIZE_ARGS is assumed    ***\n");
+	fprintf(shim_config_output(), "*** WARNING: to point to a valid string. If that condition does not hold,             ***\n");
+        fprintf(shim_config_output(), "*** WARNING: undefined behaviour may occur, and the application may crash             ***\n");
+    }
+	
     fflush(shim_config_output());
 }

@@ -33,6 +33,7 @@ The following environment variables can be defined, to adjust logging behaviour:
 	  Beware: **this mode may overflow memory, if writing to the output can't keep up with the rate of incoming messages**. You have been warned!
 
 - `PKCS11SHIM_REVEALPIN`, when present and set to `1`, `on`, `yes` or `true`, will reveal the PIN or passphrase passed to the `C_Login()` API call.
+- `PKCS11SHIM_PRESERVED_IS_A_STRING`, when present and set to `1`, `on`, `yes` or `true`, will cast the pReserved member of CK_C_INITIALIZE_ARGS struct as a string pointer. This is expected by NSS only, and should be used only in this circumstance. Setting the variable may lead to undefined behaviour if `pReserved ` doesn't point to a valid string.
 
 ## Building
 

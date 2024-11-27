@@ -5,11 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
-- potential buffer overflow fixed when printing hex strings
+## [1.8.0] - 2024-11-27
+### Added
 - custom mechanisms are printed
+- mechanisms parameters are dumped when available
+- `CK_C_INITIALIZE_ARGS.pReserved` value printed. If not null, the first bytes are also printed.
+- `CK_C_INITIALIZE_ARGS.pReserved` is printed as a string if `PKCS11SHIM_PRESERVED_IS_A_STRING` environment variable is defined.
 
-## [.7.2] - 2023-06-29
+### Fixed
+- potential buffer overrun fixed when printing hex strings
+
+## [1.7.2] - 2023-06-29
 ### Fixed
 - A few boolean attributes were incorrectly displayed as generic attributes.
 
