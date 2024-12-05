@@ -1,13 +1,15 @@
 # libpkcs11shim : a shim library for PKCS#11
 
 ## Introduction
+
 `libpkcs11shim` is a shim library that you insert between an application and a target PKCS#11 library. This project is actually a fork on a small part of [OpenSC project on GitHub](https://github.com/OpenSC/OpenSC), called [`pkcs11-spy`](src/pkcs11/pkcs11-spy.c). In addition to `pkcs11-spy`, `libpkcs11shim` adds some capabilities:
+
  - cleaner log output
  - ability to capture logs in a multithreaded environment
  - ability to carry on capture upon fork of the calling process
  - provides a deferred logging capability, reducing significantly the impact on performance on a library being logged (at the cost of extra memory allocation)
  - microsecond resolution for API call, allowing to identify library performance problems
- - hides passphrase information by default (that can be overriden by an environment variable, see options below)
+ - hides passphrase information by default (that can be overriden by an environment variable)
 
 ## Download
 Releases are hosted on Github: https://github.com/Mastercard/libpkcs11shim/releases/
@@ -43,6 +45,27 @@ To build the library:
  3. execute `./configure`. As usual, configure script contains several options that can be useful to better match your environment.
  4. execute `make`
  5. optionally, `make install`. The library is named `libpkcs11shim.so` and is deployed by default to `/usr/local/lib`.
+
+## Building with docker
+
+It is possible to build the library artifacts using docker. there is a script called `./buildx.sh` that can perform multi-arch builds, for the following platforms:
+
+ - `oraclelinux:7`, `oraclelinux:8` and `oraclelinux:9` ( RPM and tar.gz )
+ - `amazonlinux:2023` ( RPM and tar.gz )
+ - `debian:12` ("bookworm") ( DEB and tar.gz )
+ - `ubuntu:22.04`,`ubuntu24:04` ( DEB and tar.gz )
+ - `alpinelinux:3.21` ( APK with a dummy signature and tar.gz )
+
+You need to have a working docker environment.
+
+ - To build ubuntu:24.04 artifacts for the host architecture, use `./buildx.sh ubuntu2404`
+ - To build ubuntu:24.04 artifacts in verbose mode, use `./buildx.sh -v ubuntu2404`
+ - To build ubuntu:24.04 artifacts in very verbose mode, use `./buildx.sh -v ubuntu2404`
+ - To build ubuntu:24.04 artifacts for amd64, use `./buildx.sh ubuntu2404/amd64` (you must have docker configured properly if this is not your host architecture)
+ - To build ubuntu:24.04 artifacts for arm64, use `./buildx.sh ubuntu2404/arm64` (you must have docker configured properly if this is not your host architecture)
+ - To build ubuntu:24.04 artifacts for arm64 and amd64, use `./buildx.sh ubuntu2404/all` (you must have docker configured properly if this is not your host architecture)
+ - execute the script without arguments for further help.
+ 
 
 ## Output format
 

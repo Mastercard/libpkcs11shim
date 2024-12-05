@@ -30,6 +30,12 @@ Makefile.in
 /*.ign/
 *.log
 
+# from buildx
+*.rpm
+*.deb
+*.tar.gz
+*.apk
+
 # from pkcs11-tools
 .pkcs11rc
 pkcs11rc

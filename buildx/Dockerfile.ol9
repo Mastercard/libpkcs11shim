@@ -1,0 +1,167 @@
+#
+# pkcs11shim : a PKCS#11 shim library
+#
+# This work is based upon OpenSC pkcs11spy (https://github.com/OpenSC/OpenSC.git)
+#
+# Copyright (C) 2020  Mastercard
+#
+# This library is free software; you can redistribute it and/or
+# modify it under the terms of the GNU Lesser General Public
+# License as published by the Free Software Foundation; either
+# version 2.1 of the License, or (at your option) any later version.
+#
+# This library is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# Lesser General Public License for more details.
+#
+# You should have received a copy of the GNU Lesser General Public
+# License along with this library; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+#
+
+ARG REPO_URL="https://github.com/Mastercard/libpkcs11shim"
+
+
+FROM oraclelinux:9-slim AS base
+
+# ol9_codeready_builder is required to install autoconf-archive
+RUN microdnf --enablerepo=ol9_codeready_builder install -y \
+    oraclelinux-developer-release-el9 \
+    epel-release \
+    gcc \
+    make \
+    automake \
+    autoconf \
+    autoconf-archive \
+    libtool \
+    git \
+    tar \
+    gzip \
+    rpm-build \
+    wget \ 
+    && microdnf clean all
+
+# Deploy pandoc from github
+WORKDIR /tmp
+RUN DISTROARCH=$(arch | sed 's/aarch64/arm64/;s/x86_64/amd64/') \
+    && wget -q https://github.com/jgm/pandoc/releases/download/3.6/pandoc-3.6-linux-$DISTROARCH.tar.gz \
+    && tar -xf pandoc-3.6-linux-$DISTROARCH.tar.gz -C /usr/local --strip-components 1 \
+    && rm pandoc-3.6-linux-$DISTROARCH.tar.gz
+
+FROM base AS gitcloned
+
+ARG REPO_URL
+
+# The meta directory is used to store the version and maintainer information
+# for the RPM package
+RUN mkdir -p /meta
+
+# Clone the repository
+WORKDIR /src
+RUN git clone $REPO_URL .
+
+# Retrieve information for building RPM package later
+
+# Retrieve the architecture
+RUN PKG_ARCH=$(rpm --eval '%{_arch}') \
+    && echo "PKG_ARCH=\"$PKG_ARCH\"" >> /meta/env
+
+# Retrieve the version from git
+RUN PKG_VERSION=$(git describe --tags --abbrev=0 2>/dev/null || git describe --tags $(git rev-list --tags --max-count=1)) \
+    && echo "PKG_VERSION=\"$PKG_VERSION\"" >> /meta/env
+
+# Retrieve the maintainer from git
+RUN PKG_MAINTAINER=$(git log -1 --pretty=format:'%an <%ae>') \
+    && echo "PKG_MAINTAINER=\"$PKG_MAINTAINER\"" >> /meta/env
+
+# Retrieve description from README.md
+# This is a bit more complex as we need to strip out the first heading
+# and the first line of the second heading
+# moreover, any occurrence of '`' should be removed to avoid issues with
+# the shell
+RUN PKG_DESCRIPTION=$(cat README.md \
+    | awk '/## Introduction/{flag=1} /## Download/{flag=0} flag' \
+    | sed '/^##.*/d' \
+    | pandoc -f markdown -t plain) \
+    && echo "PKG_DESCRIPTION=\"$PKG_DESCRIPTION\"" >> /meta/env
+
+RUN echo "export PKG_VERSION PKG_MAINTAINER PKG_DESCRIPTION PKG_ARCH" >> /meta/env
+
+
+FROM gitcloned AS builder
+
+# build the project for tar package (/usr/local)
+RUN ./bootstrap.sh \
+    && ./configure \
+    && make -j $(nproc) \
+    && make install DESTDIR=/tar_build
+
+# install documentation
+RUN mkdir -p /tar_build/usr/local/share/doc/libpkcs11shim \
+    && install -m 444 -t /tar_build/usr/local/share/doc/libpkcs11shim README.md CHANGELOG.md COPYING
+
+# Build again the project for deb package (/usr)
+RUN make distclean \
+    && ./configure --prefix=/usr \
+    && make -j $(nproc) \
+    && make install DESTDIR=/rpm_build
+
+# Install documentation
+RUN mkdir -p /rpm_build/usr/share/doc/libpkcs11shim \
+    && install -m 444 -t /rpm_build/usr/share/doc/libpkcs11shim README.md CHANGELOG.md COPYING
+
+# Final stage
+FROM builder AS final
+
+RUN mkdir -p /artifacts
+
+# build the .tar.gz file
+WORKDIR /tar_build
+RUN . /meta/env && tar -czvf /artifacts/libpkcs11shim-ol9-$PKG_ARCH-$PKG_VERSION.tar.gz usr
+
+# build the RPM package
+WORKDIR /root
+
+# Create the RPM spec file
+RUN mkdir -p /root/rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
+
+
+# Copy the build artifacts to the SOURCES directory
+COPY --from=builder /rpm_build /root/rpmbuild/SOURCES/prebuilt
+
+# Create the RPM spec file
+RUN . /meta/env && cat <<EOF > /root/rpmbuild/SPECS/libpkcs11shim.spec
+Name:           libpkcs11shim
+Version:        $PKG_VERSION
+Release:        1%{?dist}
+Summary:        PKCS#11 shim library
+License:        LGPLv2.1
+URL:            $REPO_URL
+BuildRequires:  gcc, make, automake, autoconf, libtool, autoconf-archive
+
+%description
+$PKG_DESCRIPTION
+
+%install
+mkdir -p %{buildroot}
+cp -r %{_sourcedir}/prebuilt/usr %{buildroot}
+
+%files
+%{_libdir}/*
+
+%doc
+%{_docdir}/libpkcs11shim
+
+%changelog
+EOF
+
+# Build the RPM package
+RUN . /meta/env \
+    && rpmbuild -ba /root/rpmbuild/SPECS/libpkcs11shim.spec
+
+# Copy the RPM package to the artifacts directory
+RUN . /meta/env && cp /root/rpmbuild/RPMS/$PKG_ARCH/libpkcs11shim-$PKG_VERSION-1.*.rpm /artifacts
+
+# Final command to list the artifacts
+CMD [ "find", "/artifacts", "-type", "f" ]

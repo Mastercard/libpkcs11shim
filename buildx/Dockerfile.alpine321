@@ -1,0 +1,156 @@
+#
+# pkcs11shim : a PKCS#11 shim library
+#
+# This work is based upon OpenSC pkcs11spy (https://github.com/OpenSC/OpenSC.git)
+#
+# Copyright (C) 2020  Mastercard
+#
+# This library is free software; you can redistribute it and/or
+# modify it under the terms of the GNU Lesser General Public
+# License as published by the Free Software Foundation; either
+# version 2.1 of the License, or (at your option) any later version.
+#
+# This library is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# Lesser General Public License for more details.
+#
+# You should have received a copy of the GNU Lesser General Public
+# License along with this library; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+#
+
+
+ARG REPO_URL="https://github.com/Mastercard/libpkcs11shim"
+
+
+FROM alpine:3.21 AS base
+
+# Enable the community and testing repositories for Alpine
+RUN echo "@testing http://dl-cdn.alpinelinux.org/alpine/edge/testing" >> /etc/apk/repositories
+
+# Install required packages for building the project
+# coreutils is needed for 'fmt' command
+# sed is needed for string manipulation, busybox sed does not support all features
+RUN apk add --no-cache \
+    coreutils \
+    sed \
+    gawk \
+    build-base \
+    autoconf \
+    automake \
+    autoconf-archive@testing \
+    libtool \
+    pkgconf \
+    git \
+    tar \
+    bash \
+    gzip \
+    alpine-sdk \
+    sudo \
+    fakeroot
+
+FROM base AS gitcloned
+
+ARG REPO_URL
+
+# The meta directory is used to store the version and maintainer information
+# for the RPM package
+RUN mkdir -p /meta
+
+# Clone the repository
+WORKDIR /src
+RUN git clone $REPO_URL .
+
+# Retrieve information for building APK package later
+# PGK_DESCRIPTION is omitted as it is not used in the APKBUILD
+# TODO: use PKG_DESCRIPTION as description in the APKBUILD
+
+# Retrieve the architecture
+RUN PKG_ARCH=$(apk --print-arch) \
+    && echo "PKG_ARCH=\"$PKG_ARCH\"" >> /meta/env
+
+# Retrieve the version from git
+RUN PKG_VERSION=$(git describe --tags --abbrev=0 2>/dev/null || git describe --tags $(git rev-list --tags --max-count=1)) \
+    && echo "PKG_VERSION=\"$PKG_VERSION\"" >> /meta/env
+
+# Retrieve the maintainer from git
+RUN PKG_MAINTAINER=$(git log -1 --pretty=format:'%an <%ae>') \
+    && echo "PKG_MAINTAINER=\"$PKG_MAINTAINER\"" >> /meta/env
+
+RUN echo "export PKG_VERSION PKG_MAINTAINER PKG_ARCH" >> /meta/env
+
+RUN . /meta/env && echo "PKG_VERSION=$PKG_VERSION PKG_MAINTAINER=$PKG_MAINTAINER PKG_ARCH=$PKG_ARCH"
+
+
+FROM gitcloned AS builder
+
+# Build the project
+RUN ./bootstrap.sh \
+    && ./configure --prefix=/usr \
+    && make -j $(nproc) \
+    && make install DESTDIR=/build
+
+# Install documentation
+RUN mkdir -p /build/usr/share/doc/libpkcs11shim \
+    && install -m 444 -t /build/usr/share/doc/libpkcs11shim README.md CHANGELOG.md COPYING
+
+# Final stage
+FROM builder AS final
+
+RUN mkdir -p /artifacts
+
+# build the .tar.gz file
+COPY --from=builder /build /tar_build
+WORKDIR /tar_build
+RUN . /meta/env && tar -czvf /artifacts/libpkcs11shim-alpine321-$PKG_ARCH-$PKG_VERSION.tar.gz usr
+
+# build the APK package
+# Add a non-root user for building the package
+RUN adduser -D -G abuild builduser \
+    && echo "builduser ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+
+USER builduser
+WORKDIR /home/builduser
+
+# Copy pre-built files from the builder stage
+COPY --from=builder --chown=builduser:abuild /build /home/builduser/pkgroot
+
+# Create the APKBUILD file
+RUN mkdir -p /home/builduser/apkbuild
+WORKDIR /home/builduser/apkbuild
+
+# Create the APK signing key (TODO: this should be mounted as a volume instead)
+RUN mkdir -p .abuild
+RUN abuild-keygen -a -n && echo "builduser@$(hostname)" > .abuild/identity
+RUN sudo cp ~/.abuild/*.rsa.pub /etc/apk/keys/
+
+RUN . /meta/env && cat <<EOF >APKBUILD
+# Maintainer: $PKG_MAINTAINER
+pkgname=libpkcs11shim
+pkgver=$PKG_VERSION
+pkgrel=0
+pkgdesc="a PKCS#11 shim library"
+url="$REPO_URL"
+arch="all"
+license="LGPL-2.1"
+makedepends="autoconf automake libtool pkgconf"
+depends=""
+source=""
+builddir=""
+options="!check"
+
+package() {
+    mkdir -p "\$pkgdir"
+    cp -r /home/builduser/pkgroot/* "\$pkgdir/"
+}
+
+EOF
+
+RUN mkdir -p /home/builduser/packages \
+    && echo "repository=/home/builduser/packages" >> ~/.abuild/abuild.conf
+
+RUN sudo apk update && abuild -r && sudo cp /home/builduser/packages/builduser/$(arch)/*.apk /artifacts
+
+# Final command to list the artifacts
+CMD [ "find", "/artifacts", "-type", "f" ]
