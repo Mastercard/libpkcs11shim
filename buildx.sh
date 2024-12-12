@@ -28,8 +28,16 @@
 #
 set -e
 
+cleanup() {
+  echo "Caught SIGINT. Exiting..."
+  exit 1
+}
+
+trap cleanup SIGINT  # Handle SIGINT (CTRL-C)
+
 PACKAGE="libpkcs11shim"
 GITHUB_REPO="https://github.com/Mastercard/libpkcs11shim"
+GITHUB_REPO_COMMIT="HEAD"
 SUPPORTED_ARCHS="amd64 arm64"
 SUPPORTED_DISTROS="ol7 ol8 ol9 deb12 ubuntu2204 ubuntu2404 amzn2023 alpine321"
 
@@ -39,17 +47,18 @@ rev_arch_map["x86_64"]="amd64"
 rev_arch_map["aarch64"]="arm64"
 
 #
-# Usage: buildx.sh [--repo URL | -r URL] [--verbose | -v] [--max-procs N | -j N] [distro[/arch]|all[/all]] [...]
+# Usage information
 #
 function usage() {
-    echo "Usage: $0 [--repo URL | -r URL] [--verbose | -v] [--max-procs N | -j N] [distro[/arch]|all[/all]] [...]"
+    echo "Usage: $0 [-r URL] [-v] [-j N] [-c COMMIT] [distro[/arch]|all[/all]] [...]"
     echo "Supported distros: $SUPPORTED_DISTROS"
     echo "Supported archs: $SUPPORTED_ARCHS"
     echo ""
     echo "Options:"
-    echo "  --repo URL, -r URL       Specify the repository URL"
-    echo "  --verbose, -v            Increase verbosity (can be specified multiple times)"
-    echo "  --max-procs N, -j N      Specify the maximum number of processes"
+    echo "  --repo URL, -r URL         Specify the repository URL (default: $GITHUB_REPO)"
+    echo "  --commit COMMIT, -c COMMIT Specify the commit hash, tag or branch to build (default: $GITHUB_REPO_COMMIT)"
+    echo "  --verbose, -v              Increase verbosity (can be specified multiple times)"
+    echo "  --max-procs N, -j N        Specify the maximum number of processes"
     exit 1
 }
 
@@ -92,11 +101,17 @@ function get_git_tag_or_hash() {
 # $2 - arch
 # $3 - verbose: 0 or 1
 # $4 - repo_url (default: $GITHUB_REPO)
+# $5 - repo_branch (default: "main")
+# $6 - repo_commit (default: "HEAD")
+
 function create_build() {
+    set -e                      # Exit on error, repeated here to ensure it's set in the subshell
+
     local distro="$1"
     local arch="$2"
     local verbose="$3"
     local repo_url="$4"
+    local repo_commit="$5"
 
     local verbosearg="--quiet"
 
@@ -113,17 +128,18 @@ function create_build() {
 
     local platformarch="${arch_map[$arch]:-$arch}"
 
-  
-
-
     echo "Building artifacts for $distro on arch $arch (platform: $platformarch)..."
     
     local containername=$(gen_random_container_name)
-    
-    docker buildx build $verbosearg --platform linux/$platformarch --build-arg REPO_URL=$repo_url -t libpkcs11shim-build-$distro-$arch -f $(get_script_dir)/buildx/Dockerfile.$distro $(get_script_dir)/buildx
+    docker buildx build $verbosearg \
+        --platform linux/$platformarch \
+        --build-arg REPO_URL=$repo_url \
+        --build-arg REPO_COMMIT_OR_TAG=$repo_commit \
+        -t libpkcs11shim-build-$distro-$arch \
+        -f $(get_script_dir)/buildx/Dockerfile.$distro \
+        $(get_script_dir)/buildx
     
     local artifacts=$(docker run --platform linux/$platformarch --name $containername libpkcs11shim-build-$distro-$arch)
-
     for artifact in $artifacts; do
         docker cp --quiet $containername:$artifact $(get_current_dir)/
     done
@@ -141,6 +157,7 @@ function create_build() {
 #
 function parse_and_build() {
     local repo_url="$GITHUB_REPO"
+    local repo_commit="HEAD"
     local verbose=0
     local args=()
     local numprocs=$(nproc)
@@ -151,6 +168,10 @@ function parse_and_build() {
             --repo|-r)
                 shift
                 repo_url="$1"
+                ;;
+            --commit|-c)
+                shift
+                repo_commit="$1"
                 ;;
             --verbose|-v)
                 if [ "$verbose" -lt 2 ]; then
@@ -188,31 +209,31 @@ function parse_and_build() {
         if [[ "$arg" == "all/all" ]]; then
             for distro in $SUPPORTED_DISTROS; do
                 for arch in $SUPPORTED_ARCHS; do
-                    build_args+=("$distro $arch $verbose $repo_url")
+                    build_args+=("$distro $arch $verbose $repo_url $repo_commit")
                 done
             done
         elif [[ "$arg" == "all" ]]; then
             local host_arch=$(uname -m)
             for distro in $SUPPORTED_DISTROS; do
-                build_args+=("$distro $host_arch $verbose $repo_url")
+                build_args+=("$distro $host_arch $verbose $repo_url $repo_commit")
             done
         elif [[ "$arg" == */* ]]; then
             IFS='/' read -r distro arch_list <<< "$arg"
             if [[ "$arch_list" == "all" ]]; then
                 for arch in $SUPPORTED_ARCHS; do
-                    build_args+=("$distro $arch $verbose $repo_url")
+                    build_args+=("$distro $arch $verbose $repo_url $repo_commit")
                 done
             else
                 IFS=',' read -ra archs <<< "$arch_list"
                 for arch in "${archs[@]}"; do
-                    build_args+=("$distro $arch $verbose $repo_url")
+                    build_args+=("$distro $arch $verbose $repo_url $repo_commit")
                 done
             fi
         else
             IFS=',' read -ra distros <<< "$arg"
             local host_arch=${rev_arch_map[$(uname -m)]:-$(uname -m)}
             for distro in "${distros[@]}"; do
-                build_args+=("$distro $host_arch $verbose $repo_url")
+                build_args+=("$distro $host_arch $verbose $repo_url $repo_commit")
             done
         fi
     done
@@ -221,9 +242,8 @@ function parse_and_build() {
     export -f get_current_dir
     export -f get_script_dir
     export -f gen_random_container_name
-
+    
     # Run builds in parallel, limiting to the number of jobs specified by the user
-    #printf "%s\n" "${build_args[@]}" | xargs -P $numprocs -I {} bash -c 'echo "BUILD {}" && sleep 2'
     printf "%s\n" "${build_args[@]}" | xargs -P $numprocs -I {} bash -c 'create_build {}'
 }
 

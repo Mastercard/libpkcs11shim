@@ -21,11 +21,16 @@
 #
 
 ARG REPO_URL="https://github.com/Mastercard/libpkcs11shim"
+ARG REPO_COMMIT_OR_TAG="HEAD"
+ARG DISTRO_NAME="oraclelinux"
+ARG DISTRO_VERSION="7"
+ARG DISTRO_SHORT_NAME="ol7"
 
-FROM oraclelinux:7-slim AS base
+FROM ${DISTRO_NAME}:${DISTRO_VERSION}-slim AS base
 
 # Enable software collection for OL7 and deploy GCC 10 and other packages
-RUN yum install -y oracle-softwarecollection-release-el7
+RUN EL=$(rpm --eval "%{dist}" | sed s/.//) \
+    && yum install -y oracle-softwarecollection-release-${EL}
 
 # Install the necessary packages
 RUN yum install -y \
@@ -48,9 +53,10 @@ RUN DISTROARCH=$(arch | sed 's/aarch64/arm64/;s/x86_64/amd64/') \
     && tar -xf pandoc-3.6-linux-$DISTROARCH.tar.gz -C /usr/local --strip-components 1 \
     && rm pandoc-3.6-linux-$DISTROARCH.tar.gz
 
-FROM base AS gitcloned
 
+FROM base AS gitcloned
 ARG REPO_URL
+ARG REPO_COMMIT_OR_TAG
 
 # The meta directory is used to store the version and maintainer information
 # for the RPM package
@@ -59,6 +65,7 @@ RUN mkdir -p /meta
 # Clone the repository
 WORKDIR /src
 RUN git clone $REPO_URL .
+RUN git checkout $REPO_COMMIT_OR_TAG
 
 # Retrieve information for building RPM package later
 
@@ -66,9 +73,16 @@ RUN git clone $REPO_URL .
 RUN PKG_ARCH=$(rpm --eval '%{_arch}') \
     && echo "PKG_ARCH=\"$PKG_ARCH\"" >> /meta/env
 
-# Retrieve the version from git
-RUN PKG_VERSION=$(git describe --tags --abbrev=0 2>/dev/null || git describe --tags $(git rev-list --tags --max-count=1)) \
-    && echo "PKG_VERSION=\"$PKG_VERSION\"" >> /meta/env
+# Retrieve version information from git
+# If the version is a tag, set PKG_GITSUFFIX to the tag, or to '~<commit>' if the tag is not the last commit
+RUN PKG_VERSION=$(git describe --tags | sed -E 's/^([^\-]+)(-.*)?$/\1/' ) \
+    PKG_RELEASE=$(git describe --tags | sed -E 's/^([^\-]+)(-.*)?$/\2/; s/^-//; s/^$/0/; s/-(.*)//' ) \
+    PKG_GITCOMMIT=$(git rev-parse --short HEAD) \
+    PKG_GITSUFFIX=$(git describe --tags | sed -E 's/^([^\-]+)(-.*)?$/\2/;s/-([0-9]*)-g(.*)/~\2/') \
+    && echo "PKG_GITSUFFIX=\"$PKG_GITSUFFIX\"" >> /meta/env \
+    && echo "PKG_VERSION=\"$PKG_VERSION\"" >> /meta/env \
+    && echo "PKG_RELEASE=\"$PKG_RELEASE\"" >> /meta/env \
+    && echo "PKG_GITCOMMIT=\"$PKG_GITCOMMIT\"" >> /meta/env
 
 # Retrieve the maintainer from git
 RUN PKG_MAINTAINER=$(git log -1 --pretty=format:'%an <%ae>') \
@@ -82,10 +96,11 @@ RUN PKG_MAINTAINER=$(git log -1 --pretty=format:'%an <%ae>') \
 RUN PKG_DESCRIPTION=$(cat README.md \
     | awk '/## Introduction/{flag=1} /## Download/{flag=0} flag' \
     | sed '/^##.*/d' \
-    | pandoc -f markdown -t plain) \
+    | pandoc -f markdown -t plain \
+    | sed '/^[[:space:]]*$/d') \
     && echo "PKG_DESCRIPTION=\"$PKG_DESCRIPTION\"" >> /meta/env
 
-RUN echo "export PKG_VERSION PKG_MAINTAINER PKG_DESCRIPTION PKG_ARCH" >> /meta/env
+    RUN echo "export PKG_GITSUFFIX PKG_VERSION PKG_RELEASE PKG_GITCOMMIT PKG_MAINTAINER PKG_ARCH" >> /meta/env
 
 
 FROM gitcloned AS builder
@@ -119,22 +134,22 @@ RUN mkdir -p /rpm_build/usr/share/doc/libpkcs11shim \
 
 RUN find /rpm_build
 
-# Final stage
 
+# Final stage
 FROM builder AS final
+ARG DISTRO_SHORT_NAME
 
 RUN mkdir -p /artifacts
 
 # build the .tar.gz file
 WORKDIR /tar_build
-RUN . /meta/env && tar -czvf /artifacts/libpkcs11shim-ol7-$PKG_ARCH-$PKG_VERSION.tar.gz usr
+RUN . /meta/env && tar -czf /artifacts/libpkcs11shim-${DISTRO_SHORT_NAME}-${PKG_ARCH}-${PKG_VERSION}${PKG_GITSUFFIX}.tar.gz usr
 
 # build the RPM package
 WORKDIR /root
 
 # Create the RPM spec file
 RUN mkdir -p /root/rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
-
 
 # Copy the build artifacts to the SOURCES directory
 COPY --from=builder /rpm_build /root/rpmbuild/SOURCES/prebuilt
@@ -143,11 +158,11 @@ COPY --from=builder /rpm_build /root/rpmbuild/SOURCES/prebuilt
 RUN . /meta/env && cat <<EOF > /root/rpmbuild/SPECS/libpkcs11shim.spec
 Name:           libpkcs11shim
 Version:        $PKG_VERSION
-Release:        1%{?dist}
-Summary:        PKCS#11 shim library
+Release:        1$PKG_GITSUFFIX%{?dist}
+Summary:        a PKCS#11 shim library
 License:        LGPLv2.1
 URL:            $REPO_URL
-BuildRequires:  gcc, make, automake, autoconf, libtool, git, tar, gzip, rpm-build, autoconf-archive
+BuildRequires:  gcc, make, automake, autoconf, libtool, autoconf-archive
 %description
 $PKG_DESCRIPTION
 
@@ -164,14 +179,13 @@ cp -r %{_sourcedir}/prebuilt/usr %{buildroot}
 %changelog
 EOF
 
-RUN cat  /root/rpmbuild/SPECS/libpkcs11shim.spec
-
 # Build the RPM package
 RUN . /meta/env \
     && rpmbuild -ba /root/rpmbuild/SPECS/libpkcs11shim.spec
 
 # Copy the RPM package to the artifacts directory
-RUN . /meta/env && cp /root/rpmbuild/RPMS/$PKG_ARCH/libpkcs11shim-$PKG_VERSION-1.*.rpm /artifacts
+RUN . /meta/env \
+    && cp /root/rpmbuild/RPMS/$PKG_ARCH/libpkcs11shim-${PKG_VERSION}-1${PKG_GITSUFFIX}$(rpm --eval "%{dist}").${PKG_ARCH}.rpm /artifacts
 
 # Final command to list the artifacts
 CMD [ "find", "/artifacts", "-type", "f" ]
