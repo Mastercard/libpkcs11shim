@@ -557,6 +557,8 @@ static enum_specs ck_mec_s[] = {
     { CKM_DH_PKCS_PARAMETER_GEN    , "CKM_DH_PKCS_PARAMETER_GEN    " },
     { CKM_X9_42_DH_PARAMETER_GEN   , "CKM_X9_42_DH_PARAMETER_GEN   " },
     { CKM_AES_KEY_WRAP             , "CKM_AES_KEY_WRAP             " },
+    { CKM_AES_KEY_WRAP_PAD         , "CKM_AES_KEY_WRAP_PAD         " },
+    { CKM_AES_KEY_WRAP_KWP         , "CKM_AES_KEY_WRAP_KWP         " },
     { CKM_VENDOR_DEFINED           , "CKM_VENDOR_DEFINED           " }
 };
 

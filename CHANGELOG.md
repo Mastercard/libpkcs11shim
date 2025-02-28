@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [UNRELEASED]
 - support for building the project - multiplatform builds using docker
+- mechanisms `CKM_AES_KEY_WRAP_PAD` and `CKM_AES_KEY_WRAP_KWP` added
 
 ## [1.8.0] - 2024-11-27
 ### Added
