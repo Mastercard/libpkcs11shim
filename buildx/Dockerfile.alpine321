@@ -23,6 +23,7 @@
 
 ARG REPO_URL="https://github.com/Mastercard/libpkcs11shim"
 ARG REPO_COMMIT_OR_TAG="HEAD"
+ARG REPO_SSLVERIFY="true"
 ARG DISTRO_NAME="alpine"
 ARG DISTRO_VERSION="3.21"
 ARG DISTRO_SHORT_NAME="alpine321"
@@ -57,6 +58,7 @@ RUN apk add --no-cache \
 FROM base AS gitcloned
 ARG REPO_URL
 ARG REPO_COMMIT_OR_TAG
+ARG REPO_SSLVERIFY
 
 # The meta directory is used to store the version and maintainer information
 # for the RPM package
@@ -64,6 +66,7 @@ RUN mkdir -p /meta
 
 # Clone the repository
 WORKDIR /src
+RUN if [ "$REPO_SSLVERIFY" != "true" ]; then git config --global http.sslVerify false; fi
 RUN git clone $REPO_URL .
 RUN git checkout $REPO_COMMIT_OR_TAG
 
@@ -100,11 +103,11 @@ FROM gitcloned AS builder
 RUN ./bootstrap.sh \
     && ./configure --prefix=/usr \
     && make -j $(nproc) \
-    && make install DESTDIR=/build
+    && make install-strip DESTDIR=/build
 
 # Install documentation
 RUN mkdir -p /build/usr/share/doc/libpkcs11shim \
-    && install -m 444 -t /build/usr/share/doc/libpkcs11shim README.md CHANGELOG.md COPYING
+    && install -m 644 -t /build/usr/share/doc/libpkcs11shim README.md CHANGELOG.md COPYING
 
 
 # Final stage

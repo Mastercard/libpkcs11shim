@@ -22,6 +22,7 @@
 
 ARG REPO_URL="https://github.com/Mastercard/libpkcs11shim"
 ARG REPO_COMMIT_OR_TAG="HEAD"
+ARG REPO_SSLVERIFY="true"
 ARG DISTRO_NAME="debian"
 ARG DISTRO_VERSION="12"
 ARG DISTRO_SHORT_NAME="deb12"
@@ -47,6 +48,7 @@ RUN apt-get update && apt-get install -y \
 FROM base AS gitcloned
 ARG REPO_URL
 ARG REPO_COMMIT_OR_TAG
+ARG REPO_SSLVERIFY
 
 # The meta directory is used to store the version and maintainer information
 # for the DEB package
@@ -54,6 +56,7 @@ RUN mkdir -p /meta
 
 # Clone the repository
 WORKDIR /src
+RUN if [ "$REPO_SSLVERIFY" != "true" ]; then git config --global http.sslVerify false; fi
 RUN git clone $REPO_URL .
 RUN git checkout $REPO_COMMIT_OR_TAG
 
@@ -91,9 +94,7 @@ RUN PKG_DESCRIPTION=$(cat README.md \
     | sed '1!s/^/ /')\
     && echo "PKG_DESCRIPTION=\"$PKG_DESCRIPTION\"" >> /meta/env
 
-
 RUN echo "export PKG_GITSUFFIX PKG_VERSION PKG_RELEASE PKG_GITCOMMIT PKG_MAINTAINER PKG_ARCH" >> /meta/env
-
 
 FROM gitcloned AS builder
 
@@ -101,21 +102,21 @@ FROM gitcloned AS builder
 RUN ./bootstrap.sh \
     && ./configure \
     && make -j $(nproc)\
-    && make install DESTDIR=/tar_build
+    && make install-strip DESTDIR=/tar_build
 
 # Install documentation
 RUN mkdir -p /tar_build/usr/local/share/doc/libpkcs11shim \
-    && install -m 444 -t /tar_build/usr/local/share/doc/libpkcs11shim README.md CHANGELOG.md COPYING
+    && install -m 644 -t /tar_build/usr/local/share/doc/libpkcs11shim README.md CHANGELOG.md COPYING
 
 # Build again the project for deb package (/usr)
 RUN make distclean \
     && ./configure --prefix=/usr --libdir=/usr/lib/$(dpkg-architecture -qDEB_HOST_MULTIARCH) \
     && make -j $(nproc) \
-    && make install DESTDIR=/deb_build
+    && make install-strip DESTDIR=/deb_build
 
 # Install documentation
 RUN mkdir -p /deb_build/usr/share/doc/libpkcs11shim \
-    && install -m 444 -t /deb_build/usr/share/doc/libpkcs11shim README.md CHANGELOG.md COPYING
+    && install -m 644 -t /deb_build/usr/share/doc/libpkcs11shim README.md CHANGELOG.md COPYING
 
 
 # Final stage

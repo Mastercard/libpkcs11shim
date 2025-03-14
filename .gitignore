@@ -43,4 +43,9 @@ pkcs11rc
 # emacs
 TAGS
 *~
+
+# debugging stuff
+pkcs11.txt
+cert9.db
+key4.db
  

@@ -57,6 +57,7 @@ function usage() {
     echo "Options:"
     echo "  --repo URL, -r URL         Specify the repository URL (default: $GITHUB_REPO)"
     echo "  --commit COMMIT, -c COMMIT Specify the commit hash, tag or branch to build (default: $GITHUB_REPO_COMMIT)"
+    echo "  --skip-git-sslverify, -k   Skip SSL verification for git clone"
     echo "  --verbose, -v              Increase verbosity (can be specified multiple times)"
     echo "  --max-procs N, -j N        Specify the maximum number of processes"
     exit 1
@@ -112,6 +113,7 @@ function create_build() {
     local verbose="$3"
     local repo_url="$4"
     local repo_commit="$5"
+    local repo_sslverify="$6"
 
     local verbosearg="--quiet"
 
@@ -132,14 +134,15 @@ function create_build() {
     
     local containername=$(gen_random_container_name)
     docker buildx build $verbosearg \
-        --platform linux/$platformarch \
+        --platform linux/$arch \
         --build-arg REPO_URL=$repo_url \
         --build-arg REPO_COMMIT_OR_TAG=$repo_commit \
+        --build-arg REPO_SSLVERIFY=$repo_sslverify \
         -t libpkcs11shim-build-$distro-$arch \
         -f $(get_script_dir)/buildx/Dockerfile.$distro \
         $(get_script_dir)/buildx
     
-    local artifacts=$(docker run --platform linux/$platformarch --name $containername libpkcs11shim-build-$distro-$arch)
+    local artifacts=$(docker run --platform linux/$arch --name $containername libpkcs11shim-build-$distro-$arch)
     for artifact in $artifacts; do
         docker cp --quiet $containername:$artifact $(get_current_dir)/
     done
@@ -158,6 +161,7 @@ function create_build() {
 function parse_and_build() {
     local repo_url="$GITHUB_REPO"
     local repo_commit="HEAD"
+    local repo_sslverify="true"
     local verbose=0
     local args=()
     local numprocs=$(nproc)
@@ -172,6 +176,9 @@ function parse_and_build() {
             --commit|-c)
                 shift
                 repo_commit="$1"
+                ;;
+            --skip-git-sslverify|-k)
+                repo_sslverify="false"
                 ;;
             --verbose|-v)
                 if [ "$verbose" -lt 2 ]; then
@@ -209,31 +216,31 @@ function parse_and_build() {
         if [[ "$arg" == "all/all" ]]; then
             for distro in $SUPPORTED_DISTROS; do
                 for arch in $SUPPORTED_ARCHS; do
-                    build_args+=("$distro $arch $verbose $repo_url $repo_commit")
+                    build_args+=("$distro $arch $verbose $repo_url $repo_commit $repo_sslverify")
                 done
             done
         elif [[ "$arg" == "all" ]]; then
             local host_arch=$(uname -m)
             for distro in $SUPPORTED_DISTROS; do
-                build_args+=("$distro $host_arch $verbose $repo_url $repo_commit")
+                build_args+=("$distro $host_arch $verbose $repo_url $repo_commit $repo_sslverify")
             done
         elif [[ "$arg" == */* ]]; then
             IFS='/' read -r distro arch_list <<< "$arg"
             if [[ "$arch_list" == "all" ]]; then
                 for arch in $SUPPORTED_ARCHS; do
-                    build_args+=("$distro $arch $verbose $repo_url $repo_commit")
+                    build_args+=("$distro $arch $verbose $repo_url $repo_commit $repo_sslverify")
                 done
             else
                 IFS=',' read -ra archs <<< "$arch_list"
                 for arch in "${archs[@]}"; do
-                    build_args+=("$distro $arch $verbose $repo_url $repo_commit")
+                    build_args+=("$distro $arch $verbose $repo_url $repo_commit $repo_sslverify")
                 done
             fi
         else
             IFS=',' read -ra distros <<< "$arg"
             local host_arch=${rev_arch_map[$(uname -m)]:-$(uname -m)}
             for distro in "${distros[@]}"; do
-                build_args+=("$distro $host_arch $verbose $repo_url $repo_commit")
+                build_args+=("$distro $host_arch $verbose $repo_url $repo_commit $repo_sslverify")
             done
         fi
     done
