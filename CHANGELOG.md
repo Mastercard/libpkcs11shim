@@ -6,8 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [UNRELEASED]
+
+## [1.9.0] - 2025-03-14
+### Added
 - support for building the project - multiplatform builds using docker
-- mechanisms `CKM_AES_KEY_WRAP_PAD` and `CKM_AES_KEY_WRAP_KWP` added
+- mechanisms `CKM_AES_KEY_WRAP_PAD` and `CKM_AES_KEY_WRAP_KWP` recognized
 
 ## [1.8.0] - 2024-11-27
 ### Added
