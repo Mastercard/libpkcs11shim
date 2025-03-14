@@ -135,7 +135,6 @@ function create_build() {
     local containername=$(gen_random_container_name)
     docker buildx build $verbosearg \
         --platform linux/$arch \
-        -D \
         --build-arg REPO_URL=$repo_url \
         --build-arg REPO_COMMIT_OR_TAG=$repo_commit \
         --build-arg REPO_SSLVERIFY=$repo_sslverify \
