@@ -1,0 +1,65 @@
+#
+# pkcs11shim : a PKCS#11 shim library
+#
+# This work is based upon OpenSC pkcs11spy (https://github.com/OpenSC/OpenSC.git)
+#
+# Copyright (C) 2020  Mastercard
+#
+# This library is free software; you can redistribute it and/or
+# modify it under the terms of the GNU Lesser General Public
+# License as published by the Free Software Foundation; either
+# version 2.1 of the License, or (at your option) any later version.
+#
+# This library is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# Lesser General Public License for more details.
+#
+# You should have received a copy of the GNU Lesser General Public
+# License along with this library; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+#
+
+# Dockerfile for cross-compiling libpkcs11shim for Windows 64-bit (MinGW)
+FROM fedora:41 AS base
+ENV TZ=UTC
+
+RUN dnf update -y \
+    && dnf install -y \
+    mingw64-gcc \
+    mingw64-pkg-config \
+    mingw64-winpthreads-static \
+    make \
+    automake \
+    autoconf \
+    autoconf-archive \
+    libtool \
+    git \
+    tar \
+    gzip \
+    && dnf clean all
+
+FROM base AS build
+WORKDIR /src
+COPY . .
+
+# Bootstrap and configure for Windows 64-bit cross-compilation
+RUN ./bootstrap.sh
+
+RUN mingw64-configure || \
+    ./configure --host=x86_64-w64-mingw32 \
+        PKG_CONFIG=x86_64-w64-mingw32-pkg-config \
+        CFLAGS="-I/usr/x86_64-w64-mingw32/sys-root/mingw/include" \
+        LDFLAGS="-L/usr/x86_64-w64-mingw32/sys-root/mingw/lib -lws2_32"
+
+RUN make -j$(nproc)
+
+# Collect output DLL and required runtime DLLs
+RUN mkdir -p /dist \
+    && find src/.libs -name '*.dll' | xargs -I{} cp {} /dist/ 2>/dev/null || true \
+    && cp /usr/x86_64-w64-mingw32/sys-root/mingw/bin/libwinpthread-*.dll /dist/ 2>/dev/null || true \
+    && cp /usr/x86_64-w64-mingw32/sys-root/mingw/bin/libgcc_s_seh-*.dll /dist/ 2>/dev/null || true \
+    && ls -la /dist/
+
+FROM scratch AS output
+COPY --from=build /dist/ /

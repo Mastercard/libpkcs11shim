@@ -39,7 +39,7 @@ PACKAGE="libpkcs11shim"
 GITHUB_REPO="https://github.com/Mastercard/libpkcs11shim"
 GITHUB_REPO_COMMIT="HEAD"
 SUPPORTED_ARCHS="amd64 arm64"
-SUPPORTED_DISTROS="ol7 ol8 ol9 deb12 ubuntu2204 ubuntu2404 amzn2023 alpine321"
+SUPPORTED_DISTROS="ol7 ol8 ol9 deb12 ubuntu2204 ubuntu2404 amzn2023 alpine321 mingw64"
 
 # Declare an associative array, needed by docker buildx --platform option
 declare -A rev_arch_map
@@ -130,11 +130,17 @@ function create_build() {
 
     local platformarch="${arch_map[$arch]:-$arch}"
 
+    # mingw64 is a cross-compilation target; always build on linux/amd64
+    local docker_platform="linux/$arch"
+    if [ "$distro" = "mingw64" ]; then
+        docker_platform="linux/amd64"
+    fi
+
     echo "Building artifacts for $distro on arch $arch (platform: $platformarch)..."
     
     local containername=$(gen_random_container_name)
     docker buildx build $verbosearg \
-        --platform linux/$arch \
+        --platform $docker_platform \
         --build-arg REPO_URL=$repo_url \
         --build-arg REPO_COMMIT_OR_TAG=$repo_commit \
         --build-arg REPO_SSLVERIFY=$repo_sslverify \
@@ -142,7 +148,7 @@ function create_build() {
         -f $(get_script_dir)/buildx/Dockerfile.$distro \
         $(get_script_dir)/buildx
     
-    local artifacts=$(docker run --platform linux/$arch --name $containername libpkcs11shim-build-$distro-$arch)
+    local artifacts=$(docker run --platform $docker_platform --name $containername libpkcs11shim-build-$distro-$arch)
     for artifact in $artifacts; do
         docker cp --quiet $containername:$artifact $(get_current_dir)/
     done

@@ -48,4 +48,5 @@ TAGS
 pkcs11.txt
 cert9.db
 key4.db
- 
+
+output-win64/

@@ -28,10 +28,22 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include <unistd.h>
-#include <sys/time.h>
 #include <time.h>
 #include <pthread.h>
+
+#ifdef _WIN32
+#include <process.h>
+#include <windows.h>
+#include <sys/time.h>
+/* MinGW does not provide localtime_r; use localtime_s with swapped args */
+static inline struct tm *localtime_r(const time_t *timep, struct tm *result)
+{
+    return localtime_s(result, timep) == 0 ? result : NULL;
+}
+#else
+#include <unistd.h>
+#include <sys/time.h>
+#endif
 
 #if defined(__linux__)
 /* bug in glibc: gettid() is not advertised
@@ -118,8 +130,9 @@ static void enter(const char *function, struct timeval *tv)
     size_t callcnt = atomic_fetch_add_explicit(&cnt, 1, memory_order_relaxed);
 
     gettimeofday(tv, NULL);
-    tm = localtime_r(&tv->tv_sec, &threadlocal_tm);
-    strftime(time_string, sizeof(time_string), "%F %H:%M:%S", tm);
+    time_t sec = (time_t)tv->tv_sec;
+    tm = localtime_r(&sec, &threadlocal_tm);
+    strftime(time_string, sizeof(time_string), "%Y-%m-%d %H:%M:%S", tm);
 
     if (use_print_mutex)
         pthread_mutex_lock(&print_mutex);
@@ -149,8 +162,9 @@ static CK_RV retne(CK_RV rv, struct timeval *prev_tv)
     struct tm threadlocal_tm; /* used by localtime_r() */
 
     gettimeofday(&tv, NULL);
-    tm = localtime_r(&tv.tv_sec, &threadlocal_tm);
-    strftime(time_string, sizeof(time_string), "%F %H:%M:%S", tm);
+    time_t sec2 = (time_t)tv.tv_sec;
+    tm = localtime_r(&sec2, &threadlocal_tm);
+    strftime(time_string, sizeof(time_string), "%Y-%m-%d %H:%M:%S", tm);
     deferred_fprintf(shim_config_output(), "[toc] %s.%06ld\n", time_string, (long)tv.tv_usec);
     timeval_substract(&elapsed, prev_tv, &tv);
     deferred_fprintf(shim_config_output(), "[lap] %ld.%06ld\n", (long)elapsed.tv_sec, (long)elapsed.tv_usec);

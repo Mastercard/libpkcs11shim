@@ -21,8 +21,17 @@
 #include "config.h"
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
 #include <sys/stat.h>
+
+#ifdef _WIN32
+#include <process.h>
+#include <windows.h>
+#include <io.h>
+#define getppid() ((pid_t)0)
+#else
+#include <unistd.h>
+#endif
+
 #include "shim-config.h"
 #include "atfork.h"
 
