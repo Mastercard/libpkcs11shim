@@ -50,7 +50,7 @@ rev_arch_map["aarch64"]="arm64"
 # Usage information
 #
 function usage() {
-    echo "Usage: $0 [-r URL] [-v] [-j N] [-c COMMIT] [distro[/arch]|all[/all]] [...]"
+    echo "Usage: $0 [-r URL] [-v] [-j N] [-c COMMIT] [--local-source] [distro[/arch]|all[/all]] [...]"
     echo "Supported distros: $SUPPORTED_DISTROS"
     echo "Supported archs: $SUPPORTED_ARCHS"
     echo ""
@@ -58,6 +58,7 @@ function usage() {
     echo "  --repo URL, -r URL         Specify the repository URL (default: $GITHUB_REPO)"
     echo "  --commit COMMIT, -c COMMIT Specify the commit hash, tag or branch to build (default: $GITHUB_REPO_COMMIT)"
     echo "  --skip-git-sslverify, -k   Skip SSL verification for git clone"
+    echo "  --local-source             Build from the local workspace instead of cloning the remote repository"
     echo "  --verbose, -v              Increase verbosity (can be specified multiple times)"
     echo "  --max-procs N, -j N        Specify the maximum number of processes"
     exit 1
@@ -114,6 +115,7 @@ function create_build() {
     local repo_url="$4"
     local repo_commit="$5"
     local repo_sslverify="$6"
+    local source_mode="$7"
 
     local verbosearg="--quiet"
 
@@ -137,16 +139,25 @@ function create_build() {
     fi
 
     echo "Building artifacts for $distro on arch $arch (platform: $platformarch)..."
-    
+
+    # In --local-source mode the repository root must be the build context, so it
+    # can be bind-mounted and cloned from inside the container. Otherwise only the
+    # small buildx/ directory is sent as the context (default git-clone mode).
+    local build_context="$(get_script_dir)/buildx"
+    if [ "$source_mode" = "local" ]; then
+        build_context="$(get_script_dir)"
+    fi
+
     local containername=$(gen_random_container_name)
     docker buildx build $verbosearg \
         --platform $docker_platform \
         --build-arg REPO_URL=$repo_url \
         --build-arg REPO_COMMIT_OR_TAG=$repo_commit \
         --build-arg REPO_SSLVERIFY=$repo_sslverify \
+        --build-arg SOURCE_MODE=$source_mode \
         -t libpkcs11shim-build-$distro-$arch \
         -f $(get_script_dir)/buildx/Dockerfile.$distro \
-        $(get_script_dir)/buildx
+        $build_context
     
     local artifacts=$(docker run --platform $docker_platform --name $containername libpkcs11shim-build-$distro-$arch)
     for artifact in $artifacts; do
@@ -168,6 +179,7 @@ function parse_and_build() {
     local repo_url="$GITHUB_REPO"
     local repo_commit="HEAD"
     local repo_sslverify="true"
+    local source_mode="git"
     local verbose=0
     local args=()
     local numprocs=$(nproc)
@@ -185,6 +197,9 @@ function parse_and_build() {
                 ;;
             --skip-git-sslverify|-k)
                 repo_sslverify="false"
+                ;;
+            --local-source)
+                source_mode="local"
                 ;;
             --verbose|-v)
                 if [ "$verbose" -lt 2 ]; then
@@ -222,31 +237,31 @@ function parse_and_build() {
         if [[ "$arg" == "all/all" ]]; then
             for distro in $SUPPORTED_DISTROS; do
                 for arch in $SUPPORTED_ARCHS; do
-                    build_args+=("$distro $arch $verbose $repo_url $repo_commit $repo_sslverify")
+                    build_args+=("$distro $arch $verbose $repo_url $repo_commit $repo_sslverify $source_mode")
                 done
             done
         elif [[ "$arg" == "all" ]]; then
             local host_arch=$(uname -m)
             for distro in $SUPPORTED_DISTROS; do
-                build_args+=("$distro $host_arch $verbose $repo_url $repo_commit $repo_sslverify")
+                build_args+=("$distro $host_arch $verbose $repo_url $repo_commit $repo_sslverify $source_mode")
             done
         elif [[ "$arg" == */* ]]; then
             IFS='/' read -r distro arch_list <<< "$arg"
             if [[ "$arch_list" == "all" ]]; then
                 for arch in $SUPPORTED_ARCHS; do
-                    build_args+=("$distro $arch $verbose $repo_url $repo_commit $repo_sslverify")
+                    build_args+=("$distro $arch $verbose $repo_url $repo_commit $repo_sslverify $source_mode")
                 done
             else
                 IFS=',' read -ra archs <<< "$arch_list"
                 for arch in "${archs[@]}"; do
-                    build_args+=("$distro $arch $verbose $repo_url $repo_commit $repo_sslverify")
+                    build_args+=("$distro $arch $verbose $repo_url $repo_commit $repo_sslverify $source_mode")
                 done
             fi
         else
             IFS=',' read -ra distros <<< "$arg"
             local host_arch=${rev_arch_map[$(uname -m)]:-$(uname -m)}
             for distro in "${distros[@]}"; do
-                build_args+=("$distro $host_arch $verbose $repo_url $repo_commit $repo_sslverify")
+                build_args+=("$distro $host_arch $verbose $repo_url $repo_commit $repo_sslverify $source_mode")
             done
         fi
     done

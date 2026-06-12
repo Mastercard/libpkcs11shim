@@ -35,6 +35,7 @@ Makefile.in
 *.deb
 *.tar.gz
 *.apk
+*.zip
 
 # from pkcs11-tools
 .pkcs11rc
