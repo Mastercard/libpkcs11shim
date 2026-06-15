@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - support for Windows 64-bit cross-compilation via MinGW-w64 (`buildx/Dockerfile.mingw64`), integrated into the `buildx.sh` workflow (`./buildx.sh mingw64`). Produces both `.zip` and `.tar.gz` archives containing the shim DLL and its runtime DLLs.
 - `buildx.sh --local-source` option to build from the local workspace checkout instead of cloning the remote repository (submodules are resolved offline from the bind-mounted repo).
 
+### Fixed
+- typo in the startup help banner: the description line read `PKS11SHIM_CONSISTENCY` (missing the `C` in `PKCS`) while the runtime echo and `getenv()` call already used the correct name `PKCS11SHIM_CONSISTENCY`.
+
 ## [1.9.0] - 2025-03-14
 ### Added
 - support for building the project - multiplatform builds using docker

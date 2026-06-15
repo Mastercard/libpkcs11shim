@@ -28,8 +28,9 @@ $ ./buildx.sh --help
 
 By default `buildx.sh` clones the repository from the remote URL. To build directly from your local checkout (including any committed local changes) without going through the network, use `--local-source`:
 ```bash
-$ ./buildx.sh --local-source mingw64
+$ ./buildx.sh --local-source ubuntu2404
 ```
+This works for any target, including `mingw64`.
 
 ### Supported distributions
 The following distributions are supported by the `buildx.sh` script:

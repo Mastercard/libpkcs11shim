@@ -55,6 +55,7 @@ It is possible to build the library artifacts using docker. there is a script ca
  - `debian:12` ("bookworm") ( DEB and tar.gz )
  - `ubuntu:22.04`,`ubuntu24:04` ( DEB and tar.gz )
  - `alpinelinux:3.21` ( APK with a dummy signature and tar.gz )
+ - `Windows x86_64` via MinGW-w64 cross-compilation ( ZIP and tar.gz )
 
 You need to have a working docker environment.
 
@@ -64,8 +65,9 @@ You need to have a working docker environment.
  - To build ubuntu:24.04 artifacts for amd64, use `./buildx.sh ubuntu2404/amd64` (you must have docker configured properly if this is not your host architecture)
  - To build ubuntu:24.04 artifacts for arm64, use `./buildx.sh ubuntu2404/arm64` (you must have docker configured properly if this is not your host architecture)
  - To build ubuntu:24.04 artifacts for arm64 and amd64, use `./buildx.sh ubuntu2404/all` (you must have docker configured properly if this is not your host architecture)
+ - To build Windows 64-bit artifacts (cross-compiled via MinGW-w64), use `./buildx.sh mingw64`
+ - To build from your local checkout instead of cloning the remote, add `--local-source`, e.g. `./buildx.sh --local-source ubuntu2404`
  - execute the script without arguments for further help.
- 
 
 ## Output format
 

@@ -355,7 +355,7 @@ void shim_config_logfile_prolog(bool firsttime)
 	    "* The following env variables can be used to adjust the library behaviour: *\n"
 	    "* - PKCS11SHIM: contains the path of the library to intercept calls to     *\n"
 	    "* - PKCS11SHIM_OUTPUT: path to an output file where to write logs          *\n"
-	    "* - PKS11SHIM_CONSISTENCY: level of consistency for logs (0,1 or 2)        *\n"
+	    "* - PKCS11SHIM_CONSISTENCY: level of consistency for logs (0,1 or 2)       *\n"
 	    "****************************************************************************\n"
 	    "\n",
 	    VERSION, (int)(63-strlen(VERSION)), "");
