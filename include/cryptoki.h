@@ -36,6 +36,14 @@
 #define NULL_PTR 0
 #endif
 
-#include "pkcs11.h"		/* include from OASIS submodule */
+#if defined(_WIN32)
+#pragma pack(push, cryptoki, 1)
+#endif
+
+#include "pkcs11.h"             /* include from OASIS submodule */
+
+#if defined(_WIN32)
+#pragma pack(pop, cryptoki)
+#endif
 
 #endif /* _CRYPTOKI_H_ */

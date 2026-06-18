@@ -21,8 +21,17 @@
 #include "config.h"
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
 #include <sys/stat.h>
+
+#ifdef _WIN32
+#include <process.h>
+#include <windows.h>
+#include <io.h>
+#define getppid() ((pid_t)0)
+#else
+#include <unistd.h>
+#endif
+
 #include "shim-config.h"
 #include "atfork.h"
 
@@ -346,7 +355,7 @@ void shim_config_logfile_prolog(bool firsttime)
 	    "* The following env variables can be used to adjust the library behaviour: *\n"
 	    "* - PKCS11SHIM: contains the path of the library to intercept calls to     *\n"
 	    "* - PKCS11SHIM_OUTPUT: path to an output file where to write logs          *\n"
-	    "* - PKS11SHIM_CONSISTENCY: level of consistency for logs (0,1 or 2)        *\n"
+	    "* - PKCS11SHIM_CONSISTENCY: level of consistency for logs (0,1 or 2)       *\n"
 	    "****************************************************************************\n"
 	    "\n",
 	    VERSION, (int)(63-strlen(VERSION)), "");

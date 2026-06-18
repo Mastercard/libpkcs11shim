@@ -56,6 +56,8 @@
 #include <stdio.h>
 #include <stdbool.h>
 
+#include <sys/types.h>
+
 enum consistency_level_t {
     basic,
     per_callblock,

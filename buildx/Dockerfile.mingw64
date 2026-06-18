@@ -1,0 +1,158 @@
+#
+# pkcs11shim : a PKCS#11 shim library
+#
+# This work is based upon OpenSC pkcs11spy (https://github.com/OpenSC/OpenSC.git)
+#
+# Copyright (C) 2020  Mastercard
+#
+# This library is free software; you can redistribute it and/or
+# modify it under the terms of the GNU Lesser General Public
+# License as published by the Free Software Foundation; either
+# version 2.1 of the License, or (at your option) any later version.
+#
+# This library is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# Lesser General Public License for more details.
+#
+# You should have received a copy of the GNU Lesser General Public
+# License along with this library; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+#
+
+# Dockerfile for cross-compiling libpkcs11shim for Windows 64-bit (MinGW-w64)
+
+ARG REPO_URL="https://github.com/Mastercard/libpkcs11shim"
+ARG REPO_COMMIT_OR_TAG="HEAD"
+ARG REPO_SSLVERIFY="true"
+ARG SOURCE_MODE="git"
+ARG DISTRO_NAME="fedora"
+ARG DISTRO_VERSION="41"
+ARG DISTRO_SHORT_NAME="mingw64"
+
+FROM ${DISTRO_NAME}:${DISTRO_VERSION} AS base
+ENV TZ=UTC
+
+# Install MinGW-w64 cross-compilation toolchain and build tools
+RUN dnf update -y \
+    && dnf install -y \
+    mingw64-gcc \
+    mingw64-pkg-config \
+    mingw64-winpthreads-static \
+    make \
+    automake \
+    autoconf \
+    autoconf-archive \
+    libtool \
+    git \
+    tar \
+    gzip \
+    zip \
+    && dnf clean all
+
+
+# Source stage: --local-source mode.
+# The build context is the local workspace (a git checkout with submodules
+# already populated). We bind-mount it read-only into the build and clone
+# from it via the local git protocol. No network, no copy of dirty files:
+# only the committed history is taken. Submodule URLs are rewritten to point
+# at the bind-mounted paths so submodule update works offline too.
+FROM base AS source-local
+WORKDIR /src
+ARG REPO_COMMIT_OR_TAG
+RUN --mount=type=bind,target=/host-repo,ro \
+    git -c protocol.file.allow=always clone /host-repo /src \
+ && cd /src \
+ && if [ "$REPO_COMMIT_OR_TAG" != "HEAD" ]; then git checkout "$REPO_COMMIT_OR_TAG"; fi \
+ && if [ -f .gitmodules ]; then \
+        git config -f .gitmodules --get-regexp '^submodule\..*\.path$' | while read -r key path; do \
+            sm=${key#submodule.}; sm=${sm%.path}; \
+            git config "submodule.${sm}.url" "/host-repo/${path}"; \
+        done; \
+        git -c protocol.file.allow=always submodule update --init; \
+    fi
+
+
+# Source stage: default git-clone mode.
+# REPO_URL is cloned fresh inside the container from a remote.
+FROM base AS source-git
+ARG REPO_URL
+ARG REPO_COMMIT_OR_TAG
+ARG REPO_SSLVERIFY
+WORKDIR /src
+RUN if [ "$REPO_SSLVERIFY" != "true" ]; then git config --global http.sslVerify false; fi
+RUN git clone $REPO_URL .
+RUN git checkout $REPO_COMMIT_OR_TAG
+RUN if [ -f .gitmodules ]; then git submodule update --init; fi
+
+
+# Pick the source variant based on SOURCE_MODE (local|git).
+ARG SOURCE_MODE
+FROM source-${SOURCE_MODE} AS gitcloned
+WORKDIR /src
+
+# The meta directory is used to store the version information for the archives
+RUN mkdir -p /meta
+
+# Retrieve metadata for archive naming.
+# Windows 64-bit cross-compilation always produces x86_64 binaries.
+RUN PKG_ARCH="x86_64" \
+    && echo "PKG_ARCH=\"$PKG_ARCH\"" >> /meta/env
+
+# Retrieve version information from git
+# If the version is a tag, set PKG_GITSUFFIX to the tag, or to '~<commit>' if the
+# tag is not the last commit
+RUN PKG_VERSION=$(git describe --tags | sed -E 's/^([^\-]+)(-.*)?$/\1/' ) \
+    PKG_RELEASE=$(git describe --tags | sed -E 's/^([^\-]+)(-.*)?$/\2/; s/^-//; s/^$/0/; s/-(.*)//' ) \
+    PKG_GITCOMMIT=$(git rev-parse --short HEAD) \
+    PKG_GITSUFFIX=$(git describe --tags | sed -E 's/^([^\-]+)(-.*)?$/\2/;s/-([0-9]*)-g(.*)/~\2/') \
+    && echo "PKG_GITSUFFIX=\"$PKG_GITSUFFIX\"" >> /meta/env \
+    && echo "PKG_VERSION=\"$PKG_VERSION\"" >> /meta/env \
+    && echo "PKG_RELEASE=\"$PKG_RELEASE\"" >> /meta/env \
+    && echo "PKG_GITCOMMIT=\"$PKG_GITCOMMIT\"" >> /meta/env
+
+RUN echo "export PKG_GITSUFFIX PKG_VERSION PKG_RELEASE PKG_GITCOMMIT PKG_ARCH" >> /meta/env
+
+
+FROM gitcloned AS builder
+
+# Bootstrap and configure for Windows 64-bit cross-compilation
+RUN ./bootstrap.sh
+
+RUN mingw64-configure || \
+    ./configure --host=x86_64-w64-mingw32 \
+        PKG_CONFIG=x86_64-w64-mingw32-pkg-config \
+        CFLAGS="-I/usr/x86_64-w64-mingw32/sys-root/mingw/include" \
+        LDFLAGS="-L/usr/x86_64-w64-mingw32/sys-root/mingw/lib -lws2_32"
+
+RUN make -j$(nproc)
+
+# Collect the output DLL, required runtime DLLs and documentation into a
+# staging directory.
+RUN mkdir -p /dist \
+    && (find src/.libs -name '*.dll' -exec cp {} /dist/ \; 2>/dev/null || true) \
+    && cp /usr/x86_64-w64-mingw32/sys-root/mingw/bin/libwinpthread-*.dll /dist/ 2>/dev/null || true \
+    && cp /usr/x86_64-w64-mingw32/sys-root/mingw/bin/libgcc_s_seh-*.dll /dist/ 2>/dev/null || true \
+    && x86_64-w64-mingw32-strip /dist/*.dll 2>/dev/null || true \
+    && cp README.md CHANGELOG.md COPYING INSTALL.md /dist/ \
+    && ls -la /dist/
+
+
+# Final stage: package the binaries into both .zip (Windows-friendly) and .tar.gz
+FROM builder AS final
+ARG DISTRO_SHORT_NAME
+
+RUN mkdir -p /artifacts
+
+# Build the .zip archive (Windows-friendly format)
+RUN . /meta/env \
+    && cd /dist \
+    && zip -r /artifacts/libpkcs11shim-${DISTRO_SHORT_NAME}-${PKG_ARCH}-${PKG_VERSION}${PKG_GITSUFFIX}.zip .
+
+# Also build a .tar.gz for parity with the other distro builds
+RUN . /meta/env \
+    && cd /dist \
+    && tar -czf /artifacts/libpkcs11shim-${DISTRO_SHORT_NAME}-${PKG_ARCH}-${PKG_VERSION}${PKG_GITSUFFIX}.tar.gz .
+
+# Final command to list the artifacts (consumed by buildx.sh)
+CMD [ "find", "/artifacts", "-type", "f" ]

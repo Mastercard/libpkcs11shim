@@ -29,7 +29,7 @@
 #include <stdarg.h>
 #include <pthread.h>
 #include <unistd.h>
-#if defined(__linux__) || defined(__APPLE__)
+#if defined(__linux__) || defined(__APPLE__) || defined(__MINGW32__)
 #include <sched.h>
 #endif
 #include "threadqueue.h"
@@ -246,7 +246,7 @@ inline void deferred_unlock_queue(void)
 inline void deferred_wait_until_empty()
 {
     while(thread_queue_length(&deferred_log_queue)>0) {
-#if defined(__linux__) || defined(__APPLE__)
+#if defined(__linux__) || defined(__APPLE__) || defined(__MINGW32__)
 	sched_yield();
 #elif defined(__FreeBSD__) || defined(__AIX__)
 	pthread_yield();
